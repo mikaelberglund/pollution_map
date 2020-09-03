@@ -155,8 +155,8 @@ for i in dftot.id.unique():
     y_train = np.append(y_train,[dftot[dftot.id == i].value.unique()[0]],axis=0)
 print('x_train has shape: ' +str(np.shape(x_train)))
 print('y_train has shape: ' +str(np.shape(y_train)))
-np.save("x_train.csv", x_train)
-np.save("y_train.csv", y_train)
+np.save("x_train.npy", x_train)
+np.save("y_train.npy", y_train)
 
 print('End')
 
