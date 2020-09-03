@@ -11,6 +11,7 @@ import numpy as np
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+import geopandas as gpd
 
 mapbox_access_token = 'pk.eyJ1IjoiYmVyZ2x1bmRtaWthZWwiLCJhIjoiY2s5OW9mbGRuMDVzeTNtanluaXY0MjJ5ciJ9.EoSpUqLEDapNCy5eZjkJRQ'
 maptitle = 'Recorded NO2 pollution in the troposhpere (lower atmosphere)'
@@ -23,12 +24,6 @@ area = ee.Geometry.Polygon([[18.001586, 59.354705], \
                             [18.101210, 59.356161], \
                             [18.105495, 59.294224], \
                             [17.987303, 59.299511]])
-
-# define the image
-# myCollection = ee.ImageCollection("COPERNICUS/S5P/NRTI/L3_NO2").filterBounds(area) \
-#     .filterDate("2020-01-12", "2020-01-30") \
-#     .select(['tropospheric_NO2_column_number_density'])
-
 
 # export the latitude, longitude and array
 def LatLonImg(img,ar):
@@ -72,13 +67,14 @@ def toImage(lats, lons, data):
     return arr
 
 def getdf(temparea):
+    columnheight = 1E4 #height of troposphere
+    NO2gpermole = 46.0055 #factor to convert 1 mole of NO2 to grams
+    tomicro=1E6 #convert to μg
     ee.Initialize()
     # define the image
     print('Getting DF')
-    myCollection = ee.ImageCollection("COPERNICUS/S5P/NRTI/L3_NO2")
-    myCollection = myCollection.filterBounds(temparea)
-    myCollection = myCollection.filterDate("2020-01-01", "2020-01-30")
-    myCollection = myCollection.select(['tropospheric_NO2_column_number_density'])
+    myCollection = ee.ImageCollection("COPERNICUS/S5P/NRTI/L3_NO2").filterBounds(temparea)\
+        .filterDate("2020-01-01", "2020-01-30").select(['tropospheric_NO2_column_number_density'])
 
     # get the median
     result = ee.Image(myCollection.median()).rename(['result'])
@@ -90,24 +86,45 @@ def getdf(temparea):
     dftemp['lat'] = pd.DataFrame(lat)
     dftemp['lon'] = pd.DataFrame(lon)
     dftemp.columns = ['value','lat','lon']
-    return dftemp
+    dftemp.value = dftemp*tomicro*NO2gpermole/columnheight
+    print(dftemp.value.max())
+    r = 0.2
+    ppdftemp = pd.read_csv('global_power_plant_database.csv',usecols=[1,2,4,5,6,7])
+    ppdftemp = ppdftemp[(ppdftemp.latitude.between(lat.mean() - r, lat.mean() + r)) &
+                (ppdftemp.longitude.between(lon.mean() - r, lon.mean() + r))]
+    ppdftemp = ppdftemp[ppdftemp.primary_fuel.isin(['Gas', 'Oil', 'Coal', 'Petcoke'])]
+    return dftemp,ppdftemp
 
-df = getdf(area)
+df, ppdf = getdf(area)
 
-def getfig(dframe):
+def getfig(dframe, ppdframe):
     print('Getting Fig')
-    fig = px.density_mapbox(dframe, lat='lat', lon='lon', z='value', radius=20,
+    fig = px.density_mapbox(dframe, lat='lat', lon='lon', z='value', radius=25,
                            center=dict(lat=dframe.lat.mean(), lon=dframe.lon.mean()),
-                            zoom=9, hover_data=['value'],range_color= [0,0.005],
-                           mapbox_style="stamen-terrain",width=1100, height=800)
+                            zoom=9, hover_data=['value'],range_color=[0,4],
+                           mapbox_style="stamen-terrain", height=800,
+                            title='Estimated NO2 μg/m³')
+    #fossil = ppdframe[ppdframe.primary_fuel.isin(['Gas','Oil','Coal','Petcoke'])]
+    fig.add_trace(
+        go.Scattermapbox(
+            lat=ppdframe.latitude,
+            lon=ppdframe.longitude,
+            mode='markers',
+            marker=go.scattermapbox.Marker(size=20),
+            text='Power plant: '+ppdframe.name+' Fuel: '+ppdframe.primary_fuel))
+
+    # fig = go.Figure(go.Densitymapbox(lat=dframe.lat, lon=dframe.lon, z=dframe.value, radius=20,
+    #                  hovertext=dframe.value,zmin=0,zmax=0.005,{width: 600, height: 400, mapbox: {style: 'stamen-terrain'}}))
+
     print('Fig Latitude: ' + str(dframe.lat.mean()) + ' & longitude: ' + str(dframe.lon.mean()))
     return fig
 
-fig = getfig(df)
+fig = getfig(df,ppdf)
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+#app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+app = dash.Dash(__name__)
 
 app.layout = html.Div([
     html.H2(maptitle),
@@ -123,21 +140,18 @@ app.layout = html.Div([
     [dash.dependencies.Input('dropdown-cities', 'value')])
 def update_coordinates(city):
     print(city)
-    r = 0.2 #coordinate radius
+    r = max(np.array((dfcities[dfcities.city == city].population)/5E6)[0],1) #coordinate radius
+    print('Radius is ' +str(r))
+    #r = 0.2
     templat = dfcities[dfcities.city == city].lat
     templat = np.array(templat)[0]
     templon = dfcities[dfcities.city == city].lng
     templon = np.array(templon)[0]
-    print('Update coordinates are latitude:' + str(templat)+ ' & longitude: ' + str(templon))
-    # temparea = ee.Geometry.Polygon([[lat+r, lon+r], \
-    #                             [lat+r, lon-r], \
-    #                             [lat-r, lon-r], \
-    #                             [lat-r, lon+r]])
     temparea = ee.Geometry.Rectangle(templon+2*r,templat+r,
                                      templon-2*r,templat-r)
     print('Getting closer')
-    tempdf = getdf(temparea)
-    tempfig = getfig(tempdf)
+    tempdf, tempppdf = getdf(temparea)
+    tempfig = getfig(tempdf, tempppdf)
     return tempfig
 
 if __name__ == '__main__':
