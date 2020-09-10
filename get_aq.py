@@ -38,39 +38,46 @@ def LatLonImg(img,ar):
     return lats, lons, data
 
 
-def get_last(imagecol,s,e,ar):
+def get_last(imagecol,s,e,ar,i):
     found_last = False
     day = 1
     d = dt.datetime.strptime(e, '%Y-%m-%d')
     while ~found_last:
         im_test = imagecol.filterDate(start = d - dt.timedelta(days=day),opt_end = d)
         # im_temp = im_test
-        im_test = ee.Image(im_test.first())
-        print(d - dt.timedelta(days=day))
+        im_test = ee.Image(im_test.first()).unmask()
+        if verbose:
+            print(d - dt.timedelta(days=day))
         if (im_test.getInfo() is not None):
             ds = dt.datetime.strftime(d - dt.timedelta(days=day), '%Y-%m-%d')
             testds = dt.datetime.strptime(ds,'%Y-%m-%d')>=dt.datetime.strptime(s,'%Y-%m-%d')
-
-            t = im_test.reduce(reducer=ee.Reducer.firstNonNull())
-            t = t.addBands(ee.Image.pixelLonLat()).getInfo()
+            #
+            # t = im_test.reduce(reducer=ee.Reducer.firstNonNull())
+            # t = t.addBands(ee.Image.pixelLonLat()).getInfo()
             # t = ee.List([im_test.get('tropospheric_NO2_column_number_density')]).\
             #     reduce(reducer=ee.Reducer.firstNonNull()).getInfo()
             # t = t.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13, scale=200,
             #                tileScale=8)  # TODO: Sätt maxPixels så att alla får samma storlek?
             if testds:
-                date = dt.datetime.utcfromtimestamp(ee.Date(im_test.get('system:time_start')).getInfo()['value'] / 1000.).strftime('%Y-%m-%d %H:%M')
+                date = dt.datetime.utcfromtimestamp(ee.Date(im_test.get('system:time_start')).getInfo()['value'] / 1000.)\
+                    .strftime('%Y-%m-%d %H:%M')
                 im_test = im_test.addBands(ee.Image.pixelLonLat())
                 im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13, scale=100,tileScale=8) #TODO: Sätt maxPixels så att alla får samma storlek?
-                if len(im_test.getInfo().get('tropospheric_NO2_column_number_density'))/len(im_test.getInfo().get('latitude'))>0.8:
+                # if verbose:
+                #     if len(im_test.getInfo().get('tropospheric_NO2_column_number_density')) > 0:
+                #         print('Max value in image is: '+str(np.array(im_test.getInfo().get('tropospheric_NO2_column_number_density')).max()))
+                # if (len(im_test.getInfo().get('tropospheric_NO2_column_number_density'))/len(im_test.getInfo().get('latitude'))>0.8):
+                if (np.array(im_test.getInfo().get('tropospheric_NO2_column_number_density')).mean() > 0):
                     # t = ee.List([im_temp.get('tropospheric_NO2_column_number_density')]). \
                     #     reduce(reducer=ee.Reducer.firstNonNull()).getInfo()
                     # t = t.addBands(ee.Image.pixelLonLat()).getInfo()
                     found_last = True
-                    print('Found data on date: '+str(d - dt.timedelta(days=day)))
                     dftemp = pd.DataFrame(im_test.getInfo())
-                    dftemp['date'] = date #TODO: Fixa datetime inkl timmar istället?
+                    dftemp['date'] = date
                     dftemp['id'] = i
-                    print('For location: ' + str(i) + '. Shape: ' + str(dftemp.shape))
+                    if verbose:
+                        print('Found data on date: '+str(d - dt.timedelta(days=day)))
+                        print('For location: ' + str(i) + '. Shape: ' + str(dftemp.shape))
                     return dftemp,date
                 else:
                     day += 1
@@ -81,15 +88,16 @@ def get_last(imagecol,s,e,ar):
 
 def get_data(locations,country):
     today=dt.datetime.strftime(dt.date.today(),'%Y-%m-%d')
-    start = '2020-08-10'
+    start = '2020-08-01'
     end = '2020-08-31'
     r = 0.01 #TODO: KÖR MED MINDRE RADIE OCH SKALA NER MINDRE, TEST OM DET GER MER RESULTAT OCH KAN KÖRAS SNABBARE PÅ NÅTT SÄTT?
     dfm = pd.DataFrame()
     dfs = pd.DataFrame()
     for i in locations.id:
-        print('Fetching location: '+str(i))
         location = re.get('https://api.openaq.org/v1/locations/' + str(i))
         l = location.json()['results']['location']
+        if verbose:
+            print('Fetching location: '+str(i) + ' called: '+str(l))
         templat = location.json()['results']['coordinates']['latitude']
         templon = location.json()['results']['coordinates']['longitude']
         temparea = ee.Geometry.Rectangle(templon + 2 * r, templat + r, templon - 2 * r, templat - r)
@@ -103,8 +111,8 @@ def get_data(locations,country):
         im_test = ee.Image(landsat.first())
         t = im_test.reduce(reducer=ee.Reducer.firstNonNull())
         t = t.addBands(ee.Image.pixelLonLat()).getInfo()
-        df,date = get_last(landsat,start, end, temparea)
-        print(landsat.size().getInfo())
+        df,date = get_last(landsat,start, end, temparea,i)
+        # print(landsat.size().getInfo())
         df['location'] = l
         dfs = dfs.append(df)
         # first_img = ee.Image(landsat.first())
@@ -144,8 +152,8 @@ def get_data(locations,country):
     print(dfs)
 
     if True:
-        dfs.to_pickle('dfs'+str( country )+str( today )+'.pkl')
-        dfm.to_pickle('dfm'+str( country )+str( today )+'.pkl')
+        dfs.to_pickle('dfs '+str( country )+' '+str( today )+'.pkl')
+        dfm.to_pickle('dfm '+str( country )+' '+str( today )+'.pkl')
     l = []
     for i in dftot.id.unique():
         im = dftot[dftot.id == i][['latitude','longitude','tropospheric_NO2_column_number_density']].\
@@ -153,30 +161,33 @@ def get_data(locations,country):
         l.append(np.shape(im))
     pd.DataFrame(l).max()
 
-    x_train = np.empty(shape=(1, 23, 45))
+    x_train = np.empty(shape=(1, pd.DataFrame(l).max()[0], pd.DataFrame(l).max()[1]))
     y_train = np.empty(shape=(1))
     for i in dftot.id.unique():
         im = dftot[dftot.id == i][['latitude', 'longitude', 'tropospheric_NO2_column_number_density']]\
             .drop_duplicates().pivot('latitude','longitude','tropospheric_NO2_column_number_density').values
-        if np.shape(im)[1]<45:
+        if np.shape(im)[1]<pd.DataFrame(l).max()[1]:
             im = np.pad(im, pad_width=((0,0),(0,1)), mode='edge')
-        if np.shape(im)[0]<23:
+        if np.shape(im)[0]<pd.DataFrame(l).max()[0]:
             im = np.pad(im, pad_width=((0,1),(0,0)), mode='edge')
         x_train = np.append(x_train, [im], axis=0)
         y_train = np.append(y_train,[dftot[dftot.id == i].value.unique()[0]],axis=0)
-    print('x_train has shape: ' +str(np.shape(x_train)))
-    print('y_train has shape: ' +str(np.shape(y_train)))
-    np.save("x_train'+str( country )+str( today )+'.npy", x_train)
-    np.save("y_train'+str( country )+str( today )+'.npy", y_train)
+    if verbose:
+        print('x_train has shape: ' +str(np.shape(x_train)))
+        print('y_train has shape: ' +str(np.shape(y_train)))
+    np.save('x_train '+str( country )+' '+str( today )+'.npy', x_train)
+    np.save('y_train '+str( country )+' '+str( today )+'.npy', y_train)
 
-    print('Finished '+str( country )+str( today ))
+    if verbose:
+        print('Finished '+str( country )+str( today ))
 
 
 # countries = re.get('https://api.openaq.org/v1/countries')
 # countries = pd.DataFrame(countries.json()['results'])
 # countries.code.unique()
-countries = ['SE','NO','DK','DE','NL','UK']
-
+# countries = ['SE','NO','DK','DE','NL','UK']
+countries = ['DK','DE','NL','UK']
+verbose = True
 # EXECUTE PER COUNTRY
 for c in countries:
     locations = re.get('https://api.openaq.org/v1/locations?country[]='+str(c))
