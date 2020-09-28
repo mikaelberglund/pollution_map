@@ -27,18 +27,25 @@ if False:
     dfm = pd.read_pickle('dfm.pkl')
 
 
-def LatLonImg(img,ar):
-    img = img.addBands(ee.Image.pixelLonLat())
+# def LatLonImg(img,ar):
+#     img = img.addBands(ee.Image.pixelLonLat())
+#
+#     img = img.reduceRegion(reducer=ee.Reducer.toList(),geometry=ar,maxPixels=1e13, scale=800, tileScale=8);
+#
+#     data = np.array((ee.Array(img.get("result")).getInfo()))
+#     lats = np.array((ee.Array(img.get("latitude")).getInfo()))
+#     lons = np.array((ee.Array(img.get("longitude")).getInfo()))
+#     return lats, lons, data
 
-    img = img.reduceRegion(reducer=ee.Reducer.toList(),geometry=ar,maxPixels=1e13, scale=800, tileScale=8);
 
-    data = np.array((ee.Array(img.get("result")).getInfo()))
-    lats = np.array((ee.Array(img.get("latitude")).getInfo()))
-    lons = np.array((ee.Array(img.get("longitude")).getInfo()))
-    return lats, lons, data
+def get_IC(dataset,temparea,start,end,band):
+    landsat = ee.ImageCollection(dataset)
+    landsat = landsat.filterBounds(temparea)
+    landsat = landsat.filterDate(start, end)
+    landsat = landsat.select([band])
+    return landsat
 
-
-def get_last(imagecol,s,e,ar,i):
+def get_last(imagecol,s,e,ar,i,ee_dataset):
     found_last = False
     day = 1
     d = dt.datetime.strptime(e, '%Y-%m-%d')
@@ -63,18 +70,32 @@ def get_last(imagecol,s,e,ar,i):
                     .strftime('%Y-%m-%d %H:%M')
                 im_test = im_test.addBands(ee.Image.pixelLonLat())
                 im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13, scale=100,tileScale=8) #TODO: Sätt maxPixels så att alla får samma storlek?
-                # if verbose:
-                #     if len(im_test.getInfo().get('tropospheric_NO2_column_number_density')) > 0:
-                #         print('Max value in image is: '+str(np.array(im_test.getInfo().get('tropospheric_NO2_column_number_density')).max()))
-                # if (len(im_test.getInfo().get('tropospheric_NO2_column_number_density'))/len(im_test.getInfo().get('latitude'))>0.8):
                 if (np.array(im_test.getInfo().get('tropospheric_NO2_column_number_density')).mean() > 0):
-                    # t = ee.List([im_temp.get('tropospheric_NO2_column_number_density')]). \
-                    #     reduce(reducer=ee.Reducer.firstNonNull()).getInfo()
-                    # t = t.addBands(ee.Image.pixelLonLat()).getInfo()
                     found_last = True
-                    dftemp = pd.DataFrame(im_test.getInfo())
-                    dftemp['date'] = date
-                    dftemp['id'] = i
+                    # dftemp = pd.DataFrame(im_test.getInfo())
+                    # dftemp['date'] = date
+                    # dftemp['id'] = i
+                    # val = dftemp.columns.drop(['latitude', 'longitude','date','id'])[0]
+                    # dftemp['measurement'] = val
+                    # dftemp = dftemp.rename(columns={val:'value'}) #TODO: CHECK IF RISK FOR DUPLICATES HERE.
+                    ### Fetch for all combinations of datasets and bands in ee_dataset
+                    dftemp = pd.DataFrame()
+                    for j in range(0, len(ee_dataset)):
+                        ds = ee_dataset.loc[j, :].dataset
+                        b = ee_dataset.loc[j, :].bands
+                        IC = get_IC(ds,ar,s,e,b)
+                        im_test = IC.filterDate(start=d - dt.timedelta(days=day), opt_end=d)
+                        im_test = ee.Image(im_test.first()).unmask()
+                        im_test = im_test.addBands(ee.Image.pixelLonLat())
+                        im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13,
+                                                       scale=100, tileScale=8)
+                        dft = pd.DataFrame(im_test.getInfo())
+                        dft['date'] = date
+                        dft['id'] = i
+                        val = dft.columns.drop(['latitude', 'longitude', 'date', 'id'])[0]
+                        dft['measurement'] = val
+                        dft = dft.rename(columns={val: 'pixel_value'})
+                        dftemp = dftemp.append(dft)
                     if verbose:
                         print('Found data on date: '+str(d - dt.timedelta(days=day)))
                         print('For location: ' + str(i) + '. Shape: ' + str(dftemp.shape))
@@ -86,11 +107,22 @@ def get_last(imagecol,s,e,ar,i):
             elif ~testds:
                 return pd.DataFrame(columns=['latitude','longitude','date','location']),0
 
+
 def get_data(locations,country):
+    ee_dataset = pd.DataFrame([
+        ["COPERNICUS/S5P/NRTI/L3_NO2",'tropospheric_NO2_column_number_density'],
+        ["COPERNICUS/S5P/NRTI/L3_NO2",'stratospheric_NO2_column_number_density'],
+        ['COPERNICUS/S5P/NRTI/L3_AER_AI','absorbing_aerosol_index'],
+        ['NASA/GLDAS/V021/NOAH/G025/T3H','Rainf_tavg'],
+        ['NASA/GLDAS/V021/NOAH/G025/T3H','Wind_f_inst'],
+        ['NASA/GLDAS/V021/NOAH/G025/T3H', 'Tair_f_inst'],
+        ['NASA/GLDAS/V021/NOAH/G025/T3H', 'Qair_f_inst'],
+        ['COPERNICUS/S5P/NRTI/L3_CO','CO_column_number_density']
+    ],columns=['dataset','bands'])
     today=dt.datetime.strftime(dt.date.today(),'%Y-%m-%d')
-    start = '2020-08-01'
-    end = '2020-08-31'
-    r = 0.01 #TODO: KÖR MED MINDRE RADIE OCH SKALA NER MINDRE, TEST OM DET GER MER RESULTAT OCH KAN KÖRAS SNABBARE PÅ NÅTT SÄTT?
+    start = '2020-06-01'
+    end = '2020-06-30'
+    r = 0.01
     dfm = pd.DataFrame()
     dfs = pd.DataFrame()
     for i in locations.id:
@@ -101,18 +133,16 @@ def get_data(locations,country):
         templat = location.json()['results']['coordinates']['latitude']
         templon = location.json()['results']['coordinates']['longitude']
         temparea = ee.Geometry.Rectangle(templon + 2 * r, templat + r, templon - 2 * r, templat - r)
-        # myCollection = ee.ImageCollection("COPERNICUS/S5P/NRTI/L3_NO2").filterBounds(temparea) \
-        #     .filterDate(start, end).select(['tropospheric_NO2_column_number_density']).filter(ee.Filter.eq('count', 1))
-        landsat = ee.ImageCollection("COPERNICUS/S5P/NRTI/L3_NO2")
-        landsat = landsat.filterBounds(temparea)
-        landsat = landsat.filterDate(start, end)
-        landsat = landsat.select(['tropospheric_NO2_column_number_density'])
+        # landsat = ee.ImageCollection("COPERNICUS/S5P/NRTI/L3_NO2")
+        # landsat = landsat.filterBounds(temparea)
+        # landsat = landsat.filterDate(start, end)
+        # landsat = landsat.select(['tropospheric_NO2_column_number_density'])
+        landsat = get_IC(ee_dataset.loc[0,:][0],temparea,start,end,ee_dataset.loc[0,:][1])
         # if i == 'SE-42':
-        im_test = ee.Image(landsat.first())
-        t = im_test.reduce(reducer=ee.Reducer.firstNonNull())
-        t = t.addBands(ee.Image.pixelLonLat()).getInfo()
-        df,date = get_last(landsat,start, end, temparea,i)
-        # print(landsat.size().getInfo())
+        # im_test = ee.Image(landsat.first())
+        # t = im_test.reduce(reducer=ee.Reducer.firstNonNull())
+        # t = t.addBands(ee.Image.pixelLonLat()).getInfo()
+        df,date = get_last(landsat,start, end, temparea,i,ee_dataset)
         df['location'] = l
         dfs = dfs.append(df)
         # first_img = ee.Image(landsat.first())
@@ -124,72 +154,91 @@ def get_data(locations,country):
         #     dftemp.columns = ['value', 'lat', 'lon']
         #     dfs = dfs.append(dftemp)
         if date!=0:
-            # measurements = re.get('https://api.openaq.org/v1/measurements?coordinates=' + str(templat) + ',' + str(templon) +
-            #                       '&date_from='+str(date-dt.timedelta(hours=1))+'&date_to='+str(date+dt.timedelta(days=1))+'&radius=10&parameter=no2&limit=1000')
             measurements = re.get(
                 'https://api.openaq.org/v1/measurements?coordinates=' + str(templat) + ',' + str(templon) +'&date_from='+
-                dt.datetime.strftime(dt.datetime.strptime(date, '%Y-%m-%d %H:%M') - dt.timedelta(hours=1), '%Y-%m-%d')+
-                '&date_to='+dt.datetime.strftime(dt.datetime.strptime(date, '%Y-%m-%d %H:%M') + dt.timedelta(hours=1), '%Y-%m-%d')+
-                '&radius=10&parameter=no2&limit=1000')
+                dt.datetime.strftime(dt.datetime.strptime(date, '%Y-%m-%d %H:%M') - dt.timedelta(hours=1), '%Y-%m-%d %H:%M')+
+                '&date_to='+dt.datetime.strftime(dt.datetime.strptime(date, '%Y-%m-%d %H:%M') + dt.timedelta(hours=1), '%Y-%m-%d %H:%M')+
+                '&radius=10000&parameter=no2&limit=1000') #TODO: Behöver det vara dagar och inte timmar diff för att hitta
             measurements = pd.DataFrame(measurements.json()['results'])
             dfm = dfm.append(measurements)
+            if False:
+                print('dfm: '+str(dfm.shape)+ ' & measurements: '+str(measurements.shape))
 
-    dfm.date = dfm.date.apply(pd.Series).utc
-    dfm.date = pd.to_datetime(dfm.date)
-    dfs.date = pd.to_datetime(dfs.date, format='%Y-%m-%d %H:%M', utc = True)
-    dfs.date = dfs.date.dt.round(freq='H')
-    # dftot = pd.merge(dfm,dfs,how='left',left_on=['location','date'],right_on=['location','date']) #TODO: Jag kanske måste göra en mer manuel merge för datum där jag väljer närmaste datum istället.
-    dftott = pd.merge(dfm,dfs,how='left',left_on=['location'],right_on=['location'])
-    dftot = pd.DataFrame()
-    for i in locations.id:
-        df = dftott[dftott.id == i]
-        df = df[(df.date_x - df.date_y)== (df.date_x - df.date_y).min()].drop(['date_y','coordinates'],axis='columns')
-        dftot = dftot.append(df)
-    dftot = dftot.dropna(axis='rows').drop_duplicates()
-    #dftot = dftot.drop('coordinates',axis='columns').drop_duplicates()
-    locations[['longitude','latitude']] = locations.coordinates.apply(pd.Series)
-    l = (locations.latitude-dfs[dfs.location == dfs.location.unique()[0]].latitude.mean()).idxmin()
-    print(dfs)
+    if dfm.shape[0]>0:
+        dfm.date = dfm.date.apply(pd.Series).utc
+        dfm.date = pd.to_datetime(dfm.date)
+        dfs.date = pd.to_datetime(dfs.date, format='%Y-%m-%d %H:%M', utc = True)
+        dfs.date = dfs.date.dt.round(freq='H')
+        # dftot = pd.merge(dfm,dfs,how='left',left_on=['location','date'],right_on=['location','date']) #TODO: Jag kanske måste göra en mer manuel merge för datum där jag väljer närmaste datum istället.
+        dftott = pd.merge(dfm,dfs,how='left',left_on=['location'],right_on=['location'])
+        print('Number of id in dftott is: ' + str(dftott.count()['id']))
+        dftot = pd.DataFrame()
+        for i in locations.id:
+            df = dftott[dftott.id == i]
+            df = df[(df.date_x - df.date_y)== (df.date_x - df.date_y).min()].drop(['date_y','coordinates'],axis='columns')
+            dftot = dftot.append(df)
+        dftot = dftot.dropna(axis='rows').drop_duplicates()
+        #dftot = dftot.drop('coordinates',axis='columns').drop_duplicates()
+        locations[['longitude','latitude']] = locations.coordinates.apply(pd.Series)
+        l = (locations.latitude-dfs[dfs.location == dfs.location.unique()[0]].latitude.mean()).idxmin()
+        # print(dfs)
 
-    if True:
-        dfs.to_pickle('dfs '+str( country )+' '+str( today )+'.pkl')
-        dfm.to_pickle('dfm '+str( country )+' '+str( today )+'.pkl')
-    l = []
-    for i in dftot.id.unique():
-        im = dftot[dftot.id == i][['latitude','longitude','tropospheric_NO2_column_number_density']].\
-            drop_duplicates().pivot('latitude','longitude','tropospheric_NO2_column_number_density').values
-        l.append(np.shape(im))
-    pd.DataFrame(l).max()
+        if True:
+            dfs.to_pickle('dfs '+str( country )+' '+str( today )+'.pkl')
+            dfm.to_pickle('dfm '+str( country )+' '+str( today )+'.pkl')
+        l = []
+        for i in dftot.id.unique():
+            for j in df.measurement.unique():
+                dft = dftot[dftot.measurement == j]
+                im = dft[dft.id == i][['latitude','longitude','pixel_value']]. \
+                    drop_duplicates().pivot('latitude','longitude','pixel_value').values
+                l.append(np.shape(im))
+        pd.DataFrame(l).max()
+        x_train = np.empty(shape=(1, pd.DataFrame(l).max()[0], pd.DataFrame(l).max()[1], len(dftot.measurement.unique())))
+        y_train = np.empty(shape=(1))
 
-    x_train = np.empty(shape=(1, pd.DataFrame(l).max()[0], pd.DataFrame(l).max()[1]))
-    y_train = np.empty(shape=(1))
-    for i in dftot.id.unique():
-        im = dftot[dftot.id == i][['latitude', 'longitude', 'tropospheric_NO2_column_number_density']]\
-            .drop_duplicates().pivot('latitude','longitude','tropospheric_NO2_column_number_density').values
-        if np.shape(im)[1]<pd.DataFrame(l).max()[1]:
-            im = np.pad(im, pad_width=((0,0),(0,1)), mode='edge')
-        if np.shape(im)[0]<pd.DataFrame(l).max()[0]:
-            im = np.pad(im, pad_width=((0,1),(0,0)), mode='edge')
-        x_train = np.append(x_train, [im], axis=0)
-        y_train = np.append(y_train,[dftot[dftot.id == i].value.unique()[0]],axis=0)
-    if verbose:
-        print('x_train has shape: ' +str(np.shape(x_train)))
-        print('y_train has shape: ' +str(np.shape(y_train)))
-    np.save('x_train '+str( country )+' '+str( today )+'.npy', x_train)
-    np.save('y_train '+str( country )+' '+str( today )+'.npy', y_train)
+        temp = x_train #TODO: Antal train-fall blir för många, blir temp för stor tro?emp
+        for i in dftot.id.unique(): #TODO: Säkerställ att detta loopas över korrekta enheter.
+            k=0
+            for j in df.measurement.unique():
+                print(k)
+                dft = dftot[dftot.measurement == j]
+                im = dft[dft.id == i][['latitude', 'longitude', 'pixel_value']] \
+                    .drop_duplicates().pivot('latitude','longitude','pixel_value').values
+                if np.shape(im)[1]<pd.DataFrame(l).max()[1]:
+                    im = np.pad(im, pad_width=((0,0),(0,1)), mode='edge')
+                if np.shape(im)[0]<pd.DataFrame(l).max()[0]:
+                    im = np.pad(im, pad_width=((0,1),(0,0)), mode='edge')
+                temp[0, :, :, k] = im #TODO: Jag behöver lägga till på rätt dimension, skapa temp först och lägga till sen?
+                # x_train = np.append(x_train, temp, axis=0)
+                print('temp has shape: ' +str(np.shape(temp)))
+                k=k+1
+                # x_train = np.append(x_train[:,:,:,k], [im], axis=0)
+                # x_train = np.append(x_train[:, :, :, k], np.expand_dims(np.expand_dims(im,axis=0),axis=3), axis=0)
+            x_train = np.append(x_train, temp, axis=0)
+            print('x_train has shape: ' + str(np.shape(x_train)))
+            y_train = np.append(y_train,[dftot[dftot.id == i].value.unique()[0]],axis=0)
+        if verbose:
+            print('x_train has shape: ' +str(np.shape(x_train)))
+            print('y_train has shape: ' +str(np.shape(y_train)))
+        np.save('x_train '+str( country )+' '+str( today )+'.npy', x_train)
+        np.save('y_train '+str( country )+' '+str( today )+'.npy', y_train)
+    elif dfm.shape[0] == 0:
+        print('Error: Found zero measurements (dfm)')
 
     if verbose:
         print('Finished '+str( country )+str( today ))
 
 
-# countries = re.get('https://api.openaq.org/v1/countries')
-# countries = pd.DataFrame(countries.json()['results'])
+countries = re.get('https://api.openaq.org/v1/countries')
+countries = pd.DataFrame(countries.json()['results'])
 # countries.code.unique()
 # countries = ['SE','NO','DK','DE','NL','UK']
-countries = ['DK','DE','NL','UK']
+# countries = ['DK','DE','NL','UK']
+# countries = ['DK','DE','NL','UK']
 verbose = True
 # EXECUTE PER COUNTRY
-for c in countries:
+for c in countries.sort_values(by='locations',axis='rows', ascending=False)[2:94].code:
     locations = re.get('https://api.openaq.org/v1/locations?country[]='+str(c))
     locations = pd.DataFrame(locations.json()['results'])
     get_data(locations,c)
