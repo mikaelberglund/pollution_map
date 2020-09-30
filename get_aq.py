@@ -17,7 +17,6 @@ import datetime as dt
 
 
 #!earthengine authenticate
-
 ee.Initialize()
 
 
@@ -25,17 +24,6 @@ if False:
     dftot = pd.read_pickle('dftot.pkl')
     dfs = pd.read_pickle('dfs.pkl')
     dfm = pd.read_pickle('dfm.pkl')
-
-
-# def LatLonImg(img,ar):
-#     img = img.addBands(ee.Image.pixelLonLat())
-#
-#     img = img.reduceRegion(reducer=ee.Reducer.toList(),geometry=ar,maxPixels=1e13, scale=800, tileScale=8);
-#
-#     data = np.array((ee.Array(img.get("result")).getInfo()))
-#     lats = np.array((ee.Array(img.get("latitude")).getInfo()))
-#     lons = np.array((ee.Array(img.get("longitude")).getInfo()))
-#     return lats, lons, data
 
 
 def get_IC(dataset,temparea,start,end,band):
@@ -58,13 +46,7 @@ def get_last(imagecol,s,e,ar,i,ee_dataset):
         if (im_test.getInfo() is not None):
             ds = dt.datetime.strftime(d - dt.timedelta(days=day), '%Y-%m-%d')
             testds = dt.datetime.strptime(ds,'%Y-%m-%d')>=dt.datetime.strptime(s,'%Y-%m-%d')
-            #
-            # t = im_test.reduce(reducer=ee.Reducer.firstNonNull())
-            # t = t.addBands(ee.Image.pixelLonLat()).getInfo()
-            # t = ee.List([im_test.get('tropospheric_NO2_column_number_density')]).\
-            #     reduce(reducer=ee.Reducer.firstNonNull()).getInfo()
-            # t = t.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13, scale=200,
-            #                tileScale=8)  # TODO: Sätt maxPixels så att alla får samma storlek?
+             # TODO: Sätt maxPixels så att alla får samma storlek?
             if testds:
                 date = dt.datetime.utcfromtimestamp(ee.Date(im_test.get('system:time_start')).getInfo()['value'] / 1000.)\
                     .strftime('%Y-%m-%d %H:%M')
@@ -72,15 +54,11 @@ def get_last(imagecol,s,e,ar,i,ee_dataset):
                 im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13, scale=100,tileScale=8) #TODO: Sätt maxPixels så att alla får samma storlek?
                 if (np.array(im_test.getInfo().get('tropospheric_NO2_column_number_density')).mean() > 0):
                     found_last = True
-                    # dftemp = pd.DataFrame(im_test.getInfo())
-                    # dftemp['date'] = date
-                    # dftemp['id'] = i
-                    # val = dftemp.columns.drop(['latitude', 'longitude','date','id'])[0]
-                    # dftemp['measurement'] = val
-                    # dftemp = dftemp.rename(columns={val:'value'}) #TODO: CHECK IF RISK FOR DUPLICATES HERE.
+                    #TODO: CHECK IF RISK FOR DUPLICATES HERE.
                     ### Fetch for all combinations of datasets and bands in ee_dataset
                     dftemp = pd.DataFrame()
                     for j in range(0, len(ee_dataset)):
+                        print(j)
                         ds = ee_dataset.loc[j, :].dataset
                         b = ee_dataset.loc[j, :].bands
                         IC = get_IC(ds,ar,s,e,b)
@@ -89,6 +67,9 @@ def get_last(imagecol,s,e,ar,i,ee_dataset):
                         im_test = im_test.addBands(ee.Image.pixelLonLat())
                         im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13,
                                                        scale=100, tileScale=8)
+                        # if (j == 2)&(i=='IT-365') :
+                        if (i == 'IT-365'):
+                            print('Hi')
                         dft = pd.DataFrame(im_test.getInfo())
                         dft['date'] = date
                         dft['id'] = i
@@ -133,26 +114,10 @@ def get_data(locations,country):
         templat = location.json()['results']['coordinates']['latitude']
         templon = location.json()['results']['coordinates']['longitude']
         temparea = ee.Geometry.Rectangle(templon + 2 * r, templat + r, templon - 2 * r, templat - r)
-        # landsat = ee.ImageCollection("COPERNICUS/S5P/NRTI/L3_NO2")
-        # landsat = landsat.filterBounds(temparea)
-        # landsat = landsat.filterDate(start, end)
-        # landsat = landsat.select(['tropospheric_NO2_column_number_density'])
         landsat = get_IC(ee_dataset.loc[0,:][0],temparea,start,end,ee_dataset.loc[0,:][1])
-        # if i == 'SE-42':
-        # im_test = ee.Image(landsat.first())
-        # t = im_test.reduce(reducer=ee.Reducer.firstNonNull())
-        # t = t.addBands(ee.Image.pixelLonLat()).getInfo()
         df,date = get_last(landsat,start, end, temparea,i,ee_dataset)
         df['location'] = l
         dfs = dfs.append(df)
-        # first_img = ee.Image(landsat.first())
-        # try:
-        #     lat, lon, data = LatLonImg(first_img, temparea)
-        #     dftemp = pd.DataFrame(data)
-        #     dftemp['lat'] = pd.DataFrame(lat)
-        #     dftemp['lon'] = pd.DataFrame(lon)
-        #     dftemp.columns = ['value', 'lat', 'lon']
-        #     dfs = dfs.append(dftemp)
         if date!=0:
             measurements = re.get(
                 'https://api.openaq.org/v1/measurements?coordinates=' + str(templat) + ',' + str(templon) +'&date_from='+
@@ -180,15 +145,13 @@ def get_data(locations,country):
         dftot = dftot.dropna(axis='rows').drop_duplicates()
         #dftot = dftot.drop('coordinates',axis='columns').drop_duplicates()
         locations[['longitude','latitude']] = locations.coordinates.apply(pd.Series)
-        l = (locations.latitude-dfs[dfs.location == dfs.location.unique()[0]].latitude.mean()).idxmin()
-        # print(dfs)
 
         if True:
             dfs.to_pickle('dfs '+str( country )+' '+str( today )+'.pkl')
             dfm.to_pickle('dfm '+str( country )+' '+str( today )+'.pkl')
         l = []
         for i in dftot.id.unique():
-            for j in df.measurement.unique():
+            for j in dftot.measurement.unique():
                 dft = dftot[dftot.measurement == j]
                 im = dft[dft.id == i][['latitude','longitude','pixel_value']]. \
                     drop_duplicates().pivot('latitude','longitude','pixel_value').values
@@ -197,8 +160,8 @@ def get_data(locations,country):
         x_train = np.empty(shape=(1, pd.DataFrame(l).max()[0], pd.DataFrame(l).max()[1], len(dftot.measurement.unique())))
         y_train = np.empty(shape=(1))
 
-        temp = x_train #TODO: Antal train-fall blir för många, blir temp för stor tro?emp
-        for i in dftot.id.unique(): #TODO: Säkerställ att detta loopas över korrekta enheter.
+        temp = x_train
+        for i in dftot.id.unique():
             k=0
             for j in df.measurement.unique():
                 print(k)
@@ -207,16 +170,11 @@ def get_data(locations,country):
                     .drop_duplicates().pivot('latitude','longitude','pixel_value').values
                 if np.shape(im)[1]<pd.DataFrame(l).max()[1]:
                     im = np.pad(im, pad_width=((0,0),(0,1)), mode='edge')
-                if np.shape(im)[0]<pd.DataFrame(l).max()[0]:
+                if np.shape(im)[0]<pd.DataFrame(l ).max()[0]:
                     im = np.pad(im, pad_width=((0,1),(0,0)), mode='edge')
-                temp[0, :, :, k] = im #TODO: Jag behöver lägga till på rätt dimension, skapa temp först och lägga till sen?
-                # x_train = np.append(x_train, temp, axis=0)
-                print('temp has shape: ' +str(np.shape(temp)))
+                temp[0, :, :, k] = im
                 k=k+1
-                # x_train = np.append(x_train[:,:,:,k], [im], axis=0)
-                # x_train = np.append(x_train[:, :, :, k], np.expand_dims(np.expand_dims(im,axis=0),axis=3), axis=0)
             x_train = np.append(x_train, temp, axis=0)
-            print('x_train has shape: ' + str(np.shape(x_train)))
             y_train = np.append(y_train,[dftot[dftot.id == i].value.unique()[0]],axis=0)
         if verbose:
             print('x_train has shape: ' +str(np.shape(x_train)))
@@ -238,7 +196,7 @@ countries = pd.DataFrame(countries.json()['results'])
 # countries = ['DK','DE','NL','UK']
 verbose = True
 # EXECUTE PER COUNTRY
-for c in countries.sort_values(by='locations',axis='rows', ascending=False)[2:94].code:
+for c in countries.sort_values(by='locations',axis='rows', ascending=False)[6:94].code:
     locations = re.get('https://api.openaq.org/v1/locations?country[]='+str(c))
     locations = pd.DataFrame(locations.json()['results'])
     get_data(locations,c)
