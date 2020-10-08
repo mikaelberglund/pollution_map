@@ -58,7 +58,6 @@ def get_last(imagecol,s,e,ar,i,ee_dataset):
                     ### Fetch for all combinations of datasets and bands in ee_dataset
                     dftemp = pd.DataFrame()
                     for j in range(0, len(ee_dataset)):
-                        print(j)
                         ds = ee_dataset.loc[j, :].dataset
                         b = ee_dataset.loc[j, :].bands
                         IC = get_IC(ds,ar,s,e,b)
@@ -67,19 +66,26 @@ def get_last(imagecol,s,e,ar,i,ee_dataset):
                         im_test = im_test.addBands(ee.Image.pixelLonLat())
                         im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13,
                                                        scale=100, tileScale=8)
-                        # if (j == 2)&(i=='IT-365') :
-                        if (i == 'IT-365'):
-                            print('Hi')
-                        dft = pd.DataFrame(im_test.getInfo())
-                        dft['date'] = date
-                        dft['id'] = i
-                        val = dft.columns.drop(['latitude', 'longitude', 'date', 'id'])[0]
-                        dft['measurement'] = val
-                        dft = dft.rename(columns={val: 'pixel_value'})
-                        dftemp = dftemp.append(dft)
+                        if False:
+                            print('Value has shape: '+str(np.shape(im_test.getInfo().get(b)))+' and lat has: ' +
+                                  str(np.shape(im_test.getInfo().get('latitude'))))
+                        if np.shape(im_test.getInfo().get(b)) == np.shape(im_test.getInfo().get('latitude')):
+                            dft = pd.DataFrame(im_test.getInfo())
+                            dft['date'] = date
+                            dft['id'] = i
+                            val = dft.columns.drop(['latitude', 'longitude', 'date', 'id'])[0]
+                            dft['measurement'] = val
+                            dft = dft.rename(columns={val: 'pixel_value'})
+                            dftemp = dftemp.append(dft,ignore_index=True)
                     if verbose:
                         print('Found data on date: '+str(d - dt.timedelta(days=day)))
                         print('For location: ' + str(i) + '. Shape: ' + str(dftemp.shape))
+                        #print('Indicies for dftemp are: '+str(dftemp.index))
+                    # dftempp = dftemp
+                    # dftemp = dftemp.pivot_table(values='pixel_value', index=['id','date','measurement', 'latitude'],
+                    #                             columns='longitude').reset_index().fillna(method='pad').melt()
+                    if i == "KV-1":
+                        print('Hi')
                     return dftemp,date
                 else:
                     day += 1
@@ -101,7 +107,7 @@ def get_data(locations,country):
         ['COPERNICUS/S5P/NRTI/L3_CO','CO_column_number_density']
     ],columns=['dataset','bands'])
     today=dt.datetime.strftime(dt.date.today(),'%Y-%m-%d')
-    start = '2020-06-01'
+    start = '2020-06-12'
     end = '2020-06-30'
     r = 0.01
     dfm = pd.DataFrame()
@@ -136,51 +142,53 @@ def get_data(locations,country):
         dfs.date = dfs.date.dt.round(freq='H')
         # dftot = pd.merge(dfm,dfs,how='left',left_on=['location','date'],right_on=['location','date']) #TODO: Jag kanske måste göra en mer manuel merge för datum där jag väljer närmaste datum istället.
         dftott = pd.merge(dfm,dfs,how='left',left_on=['location'],right_on=['location'])
-        print('Number of id in dftott is: ' + str(dftott.count()['id']))
-        dftot = pd.DataFrame()
-        for i in locations.id:
-            df = dftott[dftott.id == i]
-            df = df[(df.date_x - df.date_y)== (df.date_x - df.date_y).min()].drop(['date_y','coordinates'],axis='columns')
-            dftot = dftot.append(df)
-        dftot = dftot.dropna(axis='rows').drop_duplicates()
-        #dftot = dftot.drop('coordinates',axis='columns').drop_duplicates()
-        locations[['longitude','latitude']] = locations.coordinates.apply(pd.Series)
+        #if dftott.count()[id] > 0:
+        if dftott.count()['id'] > 0:
+            print('Number of id in dftott is: ' + str(dftott.count()['id']))
+            dftot = pd.DataFrame()
+            for i in locations.id:
+                df = dftott[dftott.id == i]
+                df = df[(df.date_x - df.date_y)== (df.date_x - df.date_y).min()].drop(['date_y','coordinates'],axis='columns')
+                dftot = dftot.append(df)
+            dftot = dftot.dropna(axis='rows').drop_duplicates()
+            #dftot = dftot.drop('coordinates',axis='columns').drop_duplicates()
+            locations[['longitude','latitude']] = locations.coordinates.apply(pd.Series)
 
-        if True:
-            dfs.to_pickle('dfs '+str( country )+' '+str( today )+'.pkl')
-            dfm.to_pickle('dfm '+str( country )+' '+str( today )+'.pkl')
-        l = []
-        for i in dftot.id.unique():
-            for j in dftot.measurement.unique():
-                dft = dftot[dftot.measurement == j]
-                im = dft[dft.id == i][['latitude','longitude','pixel_value']]. \
-                    drop_duplicates().pivot('latitude','longitude','pixel_value').values
-                l.append(np.shape(im))
-        pd.DataFrame(l).max()
-        x_train = np.empty(shape=(1, pd.DataFrame(l).max()[0], pd.DataFrame(l).max()[1], len(dftot.measurement.unique())))
-        y_train = np.empty(shape=(1))
+            if True:
+                dfs.to_pickle('dfs '+str( country )+' '+str( today )+'.pkl')
+                dfm.to_pickle('dfm '+str( country )+' '+str( today )+'.pkl')
+            l = []
+            for i in dftot.id.unique():
+                for j in dftot.measurement.unique():
+                    dft = dftot[dftot.measurement == j]
+                    im = dft[dft.id == i][['latitude','longitude','pixel_value']]. \
+                        drop_duplicates().pivot('latitude','longitude','pixel_value').values
+                    l.append(np.shape(im))
+            pd.DataFrame(l).max()
+            x_train = np.empty(shape=(1, pd.DataFrame(l).max()[0], pd.DataFrame(l).max()[1], len(dftot.measurement.unique())))
+            y_train = np.empty(shape=(1))
 
-        temp = x_train
-        for i in dftot.id.unique():
-            k=0
-            for j in df.measurement.unique():
-                print(k)
-                dft = dftot[dftot.measurement == j]
-                im = dft[dft.id == i][['latitude', 'longitude', 'pixel_value']] \
-                    .drop_duplicates().pivot('latitude','longitude','pixel_value').values
-                if np.shape(im)[1]<pd.DataFrame(l).max()[1]:
-                    im = np.pad(im, pad_width=((0,0),(0,1)), mode='edge')
-                if np.shape(im)[0]<pd.DataFrame(l ).max()[0]:
-                    im = np.pad(im, pad_width=((0,1),(0,0)), mode='edge')
-                temp[0, :, :, k] = im
-                k=k+1
-            x_train = np.append(x_train, temp, axis=0)
-            y_train = np.append(y_train,[dftot[dftot.id == i].value.unique()[0]],axis=0)
-        if verbose:
-            print('x_train has shape: ' +str(np.shape(x_train)))
-            print('y_train has shape: ' +str(np.shape(y_train)))
-        np.save('x_train '+str( country )+' '+str( today )+'.npy', x_train)
-        np.save('y_train '+str( country )+' '+str( today )+'.npy', y_train)
+            temp = x_train
+            for i in dftot.id.unique():
+                k=0
+                for j in df.measurement.unique():
+                    print(k)
+                    dft = dftot[dftot.measurement == j]
+                    im = dft[dft.id == i][['latitude', 'longitude', 'pixel_value']] \
+                        .drop_duplicates().pivot('latitude','longitude','pixel_value').values
+                    if np.shape(im)[1]<pd.DataFrame(l).max()[1]:
+                        im = np.pad(im, pad_width=((0,0),(0,1)), mode='edge')
+                    if np.shape(im)[0]<pd.DataFrame(l ).max()[0]:
+                        im = np.pad(im, pad_width=((0,1),(0,0)), mode='edge')
+                    temp[0, :, :, k] = im
+                    k=k+1
+                x_train = np.append(x_train, temp, axis=0)
+                y_train = np.append(y_train,[dftot[dftot.id == i].value.unique()[0]],axis=0)
+            if verbose:
+                print('x_train has shape: ' +str(np.shape(x_train)))
+                print('y_train has shape: ' +str(np.shape(y_train)))
+            np.save('x_train '+str( country )+' '+str( today )+'.npy', x_train)
+            np.save('y_train '+str( country )+' '+str( today )+'.npy', y_train)
     elif dfm.shape[0] == 0:
         print('Error: Found zero measurements (dfm)')
 
@@ -196,7 +204,7 @@ countries = pd.DataFrame(countries.json()['results'])
 # countries = ['DK','DE','NL','UK']
 verbose = True
 # EXECUTE PER COUNTRY
-for c in countries.sort_values(by='locations',axis='rows', ascending=False)[6:94].code:
+for c in countries.sort_values(by='locations',axis='rows', ascending=False)[10:94].code:
     locations = re.get('https://api.openaq.org/v1/locations?country[]='+str(c))
     locations = pd.DataFrame(locations.json()['results'])
     get_data(locations,c)
