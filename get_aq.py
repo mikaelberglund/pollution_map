@@ -84,7 +84,7 @@ def get_last(imagecol,s,e,ar,i,ee_dataset):
                     # dftempp = dftemp
                     # dftemp = dftemp.pivot_table(values='pixel_value', index=['id','date','measurement', 'latitude'],
                     #                             columns='longitude').reset_index().fillna(method='pad').melt()
-                    if i == "KV-1":
+                    if i == "MX-28":
                         print('Hi')
                     return dftemp,date
                 else:
@@ -204,7 +204,7 @@ countries = pd.DataFrame(countries.json()['results'])
 # countries = ['DK','DE','NL','UK']
 verbose = True
 # EXECUTE PER COUNTRY
-for c in countries.sort_values(by='locations',axis='rows', ascending=False)[10:94].code:
+for c in countries.sort_values(by='locations',axis='rows', ascending=False)[30:94].code:
     locations = re.get('https://api.openaq.org/v1/locations?country[]='+str(c))
     locations = pd.DataFrame(locations.json()['results'])
     get_data(locations,c)

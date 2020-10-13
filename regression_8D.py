@@ -10,7 +10,7 @@ import tensorflow as tf
 from datetime import datetime
 
 if False:
-    filelist = glob.glob('Pollution_8D/*.pkl')
+    filelist = glob.glob('Pollution_12D/*.pkl')
     dfm_files = list(filter(lambda k: 'dfm' in k, filelist))
     dfs_files = list(filter(lambda k: 'dfs' in k, filelist))
     dfm = pd.read_pickle(dfm_files[0])
@@ -21,21 +21,25 @@ if False:
         dfs = dfs.append(pd.read_pickle(f))
     print('Hi')
 if True:
-    filelist = glob.glob('Pollution_8D/*.npy')
+    filelist = glob.glob('Pollution_12D/*.npy')
     x_files = list(filter(lambda k: 'x_train' in k, filelist))
     y_files = list(filter(lambda k: 'y_train' in k, filelist))
+    x_files.sort()
+    y_files.sort()
     x_train = np.load(x_files[0])
-
     y_train = np.load(y_files[0])
-    for f in x_files[1:]:
-        x_train = np.append(x_train, np.load(f), axis=0)
-    for f in y_files[1:]:
-        y_train = np.append(y_train, np.load(f), axis=0)
-    # x_train = np.expand_dims(x_train, axis=3)
+    t = 1
+    for f in x_files[t:]:
+        if np.shape(np.load(f))[1:] == (23, 45, 8):
+            x_train = np.append(x_train, np.load(f), axis=0)
+            y_train = np.append(y_train, np.load(y_files[t]), axis=0)
+        else:
+            print('Error: Train file has wrong dimensions: '+str(f))
+        t += 1
+    # for f in y_files[1:]:
+    #     y_train = np.append(y_train, np.load(f), axis=0)
 local_project_path = '/'
-# x_train = np.load("x_train.npy",)
-# x_train = np.expand_dims(x_train,axis=3)
-# y_train = np.load("y_train.npy")
+
 print('Number of training images: '+str(x_train.shape[0]))
 ### FILLNA IN ALL IMAGES
 x_train = np.nan_to_num(x_train)
@@ -43,7 +47,7 @@ y_train = np.nan_to_num(y_train)
 ### OUTLIER REMOVAL
 df = pd.DataFrame([x_train.mean(axis=1).mean(axis=1)[:,0],y_train]).T
 df = df.rename({0:'x',1:'y'},axis='columns')
-quantiles = 0.05
+quantiles = 0.01
 xin = np.logical_and(df.x >= np.quantile(a=df.x,q=quantiles),df.x <= np.quantile(a=df.x,q=1-quantiles))
 yin = np.logical_and(df.y >= np.quantile(a=df.y,q=quantiles),df.y <= np.quantile(a=df.y,q=1-quantiles))
 f = np.array(xin&yin)
@@ -58,7 +62,7 @@ print('Number of training images (excl. outliers): '+str(x_train.shape[0]))
 x_train, x_test, y_train, y_test = model_selection.\
     train_test_split(x_train, y_train, test_size=.1)
 
-logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S")
+logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S") + ' x len is '+ str(x_train.shape[0])
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir)
 
 model = models.Sequential()
@@ -67,13 +71,13 @@ model.add(pooling.MaxPooling2D(pool_size=(2, 2)))
 model.add(core.Flatten())
 # model.add(core.Dense(100, activation='sigmoid'))
 # model.add(core.Dropout(0.2))
-# model.add(core.Dense(30, activation='sigmoid'))
-# model.add(core.Dropout(0.2))
+model.add(core.Dense(30, activation='relu'))
+model.add(core.Dropout(0.2))
 model.add(core.Dense(1))
 #model.compile(optimizer=optimizers.Adam(lr=1e-04), loss='mean_squared_error')
 model.compile(optimizer=optimizers.SGD(), loss='mean_squared_error')
 
-history = model.fit(x_train, y_train,validation_split=0.1, batch_size=30, epochs=100, callbacks=[tensorboard_callback])
+history = model.fit(x_train, y_train,validation_split=0.1, batch_size=30, epochs=10, callbacks=[tensorboard_callback])
 #score = model.evaluate(x=x_test, y=y_test, batch_size=30, verbose=1)
 pred = model.predict(x_test)
 sns.regplot(x=y_test,y=pred[:,0])
