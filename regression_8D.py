@@ -10,7 +10,7 @@ import tensorflow as tf
 from datetime import datetime
 
 if False:
-    filelist = glob.glob('Pollution_12D/*.pkl')
+    filelist = glob.glob('Pollution_8D/*.pkl')
     dfm_files = list(filter(lambda k: 'dfm' in k, filelist))
     dfs_files = list(filter(lambda k: 'dfs' in k, filelist))
     dfm = pd.read_pickle(dfm_files[0])
@@ -21,7 +21,7 @@ if False:
         dfs = dfs.append(pd.read_pickle(f))
     print('Hi')
 if True:
-    filelist = glob.glob('Pollution_12D/*.npy')
+    filelist = glob.glob('Pollution_8D/*.npy')
     x_files = list(filter(lambda k: 'x_train' in k, filelist))
     y_files = list(filter(lambda k: 'y_train' in k, filelist))
     x_files.sort()
@@ -47,9 +47,11 @@ y_train = np.nan_to_num(y_train)
 ### OUTLIER REMOVAL
 df = pd.DataFrame([x_train.mean(axis=1).mean(axis=1)[:,0],y_train]).T
 df = df.rename({0:'x',1:'y'},axis='columns')
-quantiles = 0.01
+quantiles = 0.1
 xin = np.logical_and(df.x >= np.quantile(a=df.x,q=quantiles),df.x <= np.quantile(a=df.x,q=1-quantiles))
+xin = np.logical_and(xin,df.x != 0)
 yin = np.logical_and(df.y >= np.quantile(a=df.y,q=quantiles),df.y <= np.quantile(a=df.y,q=1-quantiles))
+yin = np.logical_and(yin,df.y != 0)
 f = np.array(xin&yin)
 x_train = x_train[f]
 y_train = y_train[f]

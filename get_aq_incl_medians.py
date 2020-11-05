@@ -168,8 +168,11 @@ def get_data(locations,country):
         landsat = get_IC(ee_dataset.loc[0,:][0],temparea,start,end,ee_dataset.loc[0,:][1])
         df,date = get_last(landsat,start, end, temparea,i,ee_dataset)
         df['location'] = l
-        dfs = dfs.append(df) ### TODO: ALL VALUES SEEM TO BE SET TO ZERO.
-        if date!=0:
+        if date != 0:
+            if verbose:
+                print(df.pixel_value.describe())
+            dfs = dfs.append(df) ### TODO: ALL VALUES SEEM TO BE SET TO ZERO.
+        # if date!=0:
             rad =10000
             measurements = re.get(
                 'https://api.openaq.org/v1/measurements?coordinates=' + str(templat) + ',' + str(templon) +'&date_from='+
@@ -253,7 +256,7 @@ countries = pd.DataFrame(countries.json()['results'])
 # countries = ['DK','DE','NL','UK']
 verbose = True
 # EXECUTE PER COUNTRY
-for c in countries.sort_values(by='locations',axis='rows', ascending=False)[0:94].code:
+for c in countries.sort_values(by='locations',axis='rows', ascending=False)[40:94].code:
     if verbose:
         print(' ')
         print('Fetching for: ' + str(countries[countries.code == c].name.values) + ' which contains ' +
