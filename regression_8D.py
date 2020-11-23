@@ -8,6 +8,25 @@ import pandas as pd
 import seaborn as sns
 import tensorflow as tf
 from datetime import datetime
+from skimage.util import random_noise
+
+
+def flipud_8D(x,y,x_temp,y_temp):
+    x = np.append(x,x_temp[:, ::-1, :, :],0)
+    y = np.append(y, y_temp, 0)
+    return x,y
+def fliplr_8D(x,y,x_temp,y_temp):
+    x = np.append(x,x_temp[:, :, ::-1, :],0)
+    y = np.append(y,y_temp,0)
+    return x,y
+def flipudlr_8D(x,y,x_temp,y_temp):
+    x = np.append(x,x_temp[:, ::-1, ::-1, :],0)
+    y = np.append(y_temp, y, 0)
+    return x,y
+def noise_8D(x,y,x_temp,y_temp):
+    x = np.append(x,random_noise(x_temp),0)
+    y = np.append(y_temp, y, 0)
+    return x,y
 
 if False:
     filelist = glob.glob('Pollution_8D/*.pkl')
@@ -55,6 +74,7 @@ yin = np.logical_and(yin,df.y != 0)
 f = np.array(xin&yin)
 x_train = x_train[f]
 y_train = y_train[f]
+
 ### NORMALIZE
 xmax = x_train.max()
 ymax = y_train.max()
@@ -63,6 +83,21 @@ y_train = y_train/ymax
 print('Number of training images (excl. outliers): '+str(x_train.shape[0]))
 x_train, x_test, y_train, y_test = model_selection.\
     train_test_split(x_train, y_train, test_size=.1)
+
+### AUGMENT DATA
+x_temp = x_train
+y_temp = y_train
+x_train, y_train = flipud_8D(x_train,y_train,x_temp,y_temp)
+x_train, y_train = fliplr_8D(x_train,y_train,x_temp,y_temp)
+x_train, y_train = flipudlr_8D(x_train,y_train,x_temp,y_temp)
+x_train, y_train = noise_8D(x_train,y_train,x_temp,y_temp)
+x_temp1, y_temp1 = flipud_8D(x_train,y_train,x_temp,y_temp)
+x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp)
+x_temp1, y_temp1 = fliplr_8D(x_train,y_train,x_temp,y_temp)
+x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp)
+x_temp1, y_temp1 = flipudlr_8D(x_train,y_train,x_temp,y_temp)
+x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp)
+print('Number of training images (after augmentation, excl. outliers): '+str(x_train.shape[0]))
 
 logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S") + ' x len is '+ str(x_train.shape[0])
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir)
@@ -73,16 +108,19 @@ model.add(pooling.MaxPooling2D(pool_size=(2, 2)))
 model.add(core.Flatten())
 # model.add(core.Dense(100, activation='sigmoid'))
 # model.add(core.Dropout(0.2))
-model.add(core.Dense(30, activation='relu'))
-model.add(core.Dropout(0.2))
+# model.add(core.Dense(30, activation='relu'))
+# model.add(core.Dropout(0.2))
 model.add(core.Dense(1))
 #model.compile(optimizer=optimizers.Adam(lr=1e-04), loss='mean_squared_error')
 model.compile(optimizer=optimizers.SGD(), loss='mean_squared_error')
+# history = model.fit(it, steps_per_epoch=313)
 
-history = model.fit(x_train, y_train,validation_split=0.1, batch_size=30, epochs=10, callbacks=[tensorboard_callback])
+history = model.fit(x_train, y_train,validation_split=0.1, batch_size=30, epochs=30, callbacks=[tensorboard_callback])
 #score = model.evaluate(x=x_test, y=y_test, batch_size=30, verbose=1)
 pred = model.predict(x_test)
-sns.regplot(x=y_test,y=pred[:,0])
+#ax = sns.regplot(x=y_test*ymax,y=pred[:,0]*ymax)
+ax = sns.regplot(x=y_test,y=pred[:,0])
+ax.set(xlabel="Truth", ylabel = "Prediction")
 print('Hi')
 
 
