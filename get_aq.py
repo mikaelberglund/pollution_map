@@ -22,25 +22,25 @@ if False:
     dfs = pd.read_pickle('dfs.pkl')
     dfm = pd.read_pickle('dfm.pkl')
 
-def get_ee_dataset():
-    ee_dataset = pd.DataFrame([
-        ["COPERNICUS/S5P/NRTI/L3_NO2",'tropospheric_NO2_column_number_density'],
-        ["COPERNICUS/S5P/NRTI/L3_NO2",'stratospheric_NO2_column_number_density'],
-        ['COPERNICUS/S5P/NRTI/L3_AER_AI','absorbing_aerosol_index'],
-        ['NASA/GLDAS/V021/NOAH/G025/T3H','Rainf_tavg'],
-        ['NASA/GLDAS/V021/NOAH/G025/T3H','Wind_f_inst'],
-        ['NASA/GLDAS/V021/NOAH/G025/T3H', 'Tair_f_inst'],
-        ['NASA/GLDAS/V021/NOAH/G025/T3H', 'Qair_f_inst'],
-        ['COPERNICUS/S5P/NRTI/L3_CO','CO_column_number_density']
-    ],columns=['dataset','bands'])
-    return ee_dataset
+# def get_ee_dataset():
+#     ee_dataset = pd.DataFrame([
+#         ["COPERNICUS/S5P/NRTI/L3_NO2",'tropospheric_NO2_column_number_density'],
+#         ["COPERNICUS/S5P/NRTI/L3_NO2",'stratospheric_NO2_column_number_density'],
+#         ['COPERNICUS/S5P/NRTI/L3_AER_AI','absorbing_aerosol_index'],
+#         ['NASA/GLDAS/V021/NOAH/G025/T3H','Rainf_tavg'],
+#         ['NASA/GLDAS/V021/NOAH/G025/T3H','Wind_f_inst'],
+#         ['NASA/GLDAS/V021/NOAH/G025/T3H', 'Tair_f_inst'],
+#         ['NASA/GLDAS/V021/NOAH/G025/T3H', 'Qair_f_inst'],
+#         ['COPERNICUS/S5P/NRTI/L3_CO','CO_column_number_density']
+#     ],columns=['dataset','bands'])
+#     return ee_dataset
 
-def get_IC(dataset,temparea,start,end,band):
-    landsat = ee.ImageCollection(dataset)
-    landsat = landsat.filterBounds(temparea)
-    landsat = landsat.filterDate(start, end)
-    landsat = landsat.select([band])
-    return landsat
+# def get_IC(dataset,temparea,start,end,band):
+#     landsat = ee.ImageCollection(dataset)
+#     landsat = landsat.filterBounds(temparea)
+#     landsat = landsat.filterDate(start, end)
+#     landsat = landsat.select([band])
+#     return landsat
 
 def get_last(imagecol,s,e,ar,i,ee_dataset):
     found_last = False
@@ -204,7 +204,7 @@ countries = pd.DataFrame(countries.json()['results'])
 # countries = ['DK','DE','NL','UK']
 verbose = True
 # EXECUTE PER COUNTRY
-start_date = '2020-01-01'
+start_date = '2020-02-01'
 delta = 16
 end_date = '2020-11-01'
 i = 1
@@ -214,7 +214,7 @@ while dt.datetime.strptime(end_date,'%Y-%m-%d') > dt.datetime.strptime(start_dat
     end = dt.datetime.strftime(dt.datetime.strptime(start_date, '%Y-%m-%d') + dt.timedelta(days=i * delta), '%Y-%m-%d')
     if verbose:
         print('Fetching for date range: ' + str(start) + ' to ' + str(end))
-    for c in countries.sort_values(by='locations',axis='rows', ascending=False)[22:94].code:
+    for c in countries.sort_values(by='locations',axis='rows', ascending=False)[30:94].code:
         locations = re.get('https://api.openaq.org/v1/locations?country[]='+str(c))
         if locations.status_code == 200:
             locations = pd.DataFrame(locations.json()['results'])

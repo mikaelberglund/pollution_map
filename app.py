@@ -5,7 +5,7 @@ import numpy as np
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
-from get_aq import get_data, get_last, get_IC, get_ee_dataset
+from aq_functions import get_IC, get_ee_dataset
 
 
 mapbox_access_token = 'pk.eyJ1IjoiYmVyZ2x1bmRtaWthZWwiLCJhIjoiY2s5OW9mbGRuMDVzeTNtanluaXY0MjJ5ciJ9.EoSpUqLEDapNCy5eZjkJRQ'
@@ -43,11 +43,11 @@ app.layout = html.Div([
     [dash.dependencies.Input('dropdown-cities', 'value')])
 def update_coordinates(city):
     print(city)
-    r = max(np.array((dfcities[dfcities.city == city].population)/5E6)[0],1) #coordinate radius
+    #r = max(np.array((dfcities[dfcities.city == city].population)/5E6)[0],1) #coordinate radius
+    r = 0.01
     print('Radius is ' +str(r))
     start = '2020-06-12'
     end = '2020-07-30'
-    #r = 0.2
     templat = dfcities[dfcities.city == city].lat
     templat = np.array(templat)[0]
     templon = dfcities[dfcities.city == city].lng
@@ -56,8 +56,9 @@ def update_coordinates(city):
                                      templon-2*r,templat-r)
     ee_dataset = get_ee_dataset()
     landsat = get_IC(ee_dataset.loc[0, :][0], temparea, start, end, ee_dataset.loc[0, :][1])
-    df, date = get_last(landsat, start, end, temparea, i, ee_dataset)
+    #df, date = get_last(landsat, start, end, temparea, i, ee_dataset)
     #tempdf, tempppdf = getdf(temparea)
+    ### TODO: Fetch model and calculate pollution, in order to plot it on map?
     tempfig = getfig()
     return tempfig
 

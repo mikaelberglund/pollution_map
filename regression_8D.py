@@ -45,9 +45,9 @@ if True:
     y_files = list(filter(lambda k: 'y_train' in k, filelist))
     x_files.sort()
     y_files.sort()
-    x_train = np.load(x_files[0])
-    y_train = np.load(y_files[0])
-    t = 1
+    x_train = np.load(x_files[1])
+    y_train = np.load(y_files[1])
+    t = 2
     for f in x_files[t:]:
         if np.shape(np.load(f))[1:] == (23, 45, 8):
             x_train = np.append(x_train, np.load(f), axis=0)
@@ -82,7 +82,7 @@ x_train = x_train/xmax
 y_train = y_train/ymax
 print('Number of training images (excl. outliers): '+str(x_train.shape[0]))
 x_train, x_test, y_train, y_test = model_selection.\
-    train_test_split(x_train, y_train, test_size=.1)
+    train_test_split(x_train, y_train, test_size=.2)
 
 ### AUGMENT DATA
 x_temp = x_train
@@ -106,9 +106,9 @@ model = models.Sequential()
 model.add(convolutional.Convolution2D(4, 3, 3, input_shape=(x_train.shape[1:4]), activation='relu'))
 model.add(pooling.MaxPooling2D(pool_size=(2, 2)))
 model.add(core.Flatten())
-# model.add(core.Dense(100, activation='sigmoid'))
-# model.add(core.Dropout(0.2))
-# model.add(core.Dense(30, activation='relu'))
+model.add(core.Dense(100, activation='sigmoid'))
+model.add(core.Dropout(0.4))
+# model.add(core.Dense(30, activation='sigmoid'))
 # model.add(core.Dropout(0.2))
 model.add(core.Dense(1))
 #model.compile(optimizer=optimizers.Adam(lr=1e-04), loss='mean_squared_error')
