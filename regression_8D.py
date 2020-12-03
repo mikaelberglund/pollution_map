@@ -106,7 +106,7 @@ model = models.Sequential()
 model.add(convolutional.Convolution2D(4, 3, 3, input_shape=(x_train.shape[1:4]), activation='relu'))
 model.add(pooling.MaxPooling2D(pool_size=(2, 2)))
 model.add(core.Flatten())
-model.add(core.Dense(100, activation='sigmoid'))
+model.add(core.Dense(50, activation='sigmoid'))
 model.add(core.Dropout(0.4))
 # model.add(core.Dense(30, activation='sigmoid'))
 # model.add(core.Dropout(0.2))
@@ -120,7 +120,7 @@ history = model.fit(x_train, y_train,validation_split=0.1, batch_size=30, epochs
 pred = model.predict(x_test)
 #ax = sns.regplot(x=y_test*ymax,y=pred[:,0]*ymax)
 ax = sns.regplot(x=y_test,y=pred[:,0])
-ax.set(xlabel="Truth", ylabel = "Prediction")
+
 print('Hi')
 
 
