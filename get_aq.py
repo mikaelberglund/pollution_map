@@ -8,6 +8,7 @@ import datetime
 # from datetime import datetime as dt
 import datetime as dt
 from http.client import IncompleteRead
+from aq_functions import get_IC, get_ee_dataset
 
 # except IncompleteRead:
 #     # Oh well, reconnect and keep trucking
@@ -15,7 +16,6 @@ from http.client import IncompleteRead
 
 #!earthengine authenticate
 ee.Initialize()
-
 
 if False:
     dftot = pd.read_pickle('dftot.pkl')
@@ -114,8 +114,10 @@ def get_data(locations,country,start,end):
         location = re.get('https://api.openaq.org/v1/locations/' + str(i))
         if location.status_code == 200:
             l = location.json()['results']['location']
-            if verbose:
+            if verbose: #TODO: Same location is fetched twice? TX-1: Ashgabat & SG-1: SPARTAN - NUS. Different dates for each time?
                 print('Fetching location: '+str(i) + ' called: '+str(l))
+                if l == 'SPARTAN - NUS':
+                    print('Iteration through')
             templat = location.json()['results']['coordinates']['latitude']
             templon = location.json()['results']['coordinates']['longitude']
             temparea = ee.Geometry.Rectangle(templon + 2 * r, templat + r, templon - 2 * r, templat - r)
@@ -204,7 +206,7 @@ countries = pd.DataFrame(countries.json()['results'])
 # countries = ['DK','DE','NL','UK']
 verbose = True
 # EXECUTE PER COUNTRY
-start_date = '2020-02-01'
+start_date = '2020-06-01'
 delta = 16
 end_date = '2020-11-01'
 i = 1
@@ -214,7 +216,7 @@ while dt.datetime.strptime(end_date,'%Y-%m-%d') > dt.datetime.strptime(start_dat
     end = dt.datetime.strftime(dt.datetime.strptime(start_date, '%Y-%m-%d') + dt.timedelta(days=i * delta), '%Y-%m-%d')
     if verbose:
         print('Fetching for date range: ' + str(start) + ' to ' + str(end))
-    for c in countries.sort_values(by='locations',axis='rows', ascending=False)[30:94].code:
+    for c in countries.sort_values(by='locations',axis='rows', ascending=False)[80:94].code:
         locations = re.get('https://api.openaq.org/v1/locations?country[]='+str(c))
         if locations.status_code == 200:
             locations = pd.DataFrame(locations.json()['results'])
