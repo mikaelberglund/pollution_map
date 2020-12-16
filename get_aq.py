@@ -5,14 +5,10 @@ import pandas as pd
 import ee
 import numpy as np
 import datetime
-# from datetime import datetime as dt
 import datetime as dt
 from http.client import IncompleteRead
 from aq_functions import get_IC, get_ee_dataset
 
-# except IncompleteRead:
-#     # Oh well, reconnect and keep trucking
-#         continue
 
 #!earthengine authenticate
 ee.Initialize()
@@ -48,7 +44,6 @@ def get_last(imagecol,s,e,ar,i,ee_dataset):
     d = dt.datetime.strptime(e, '%Y-%m-%d')
     while ~found_last:
         im_test = imagecol.filterDate(start = d - dt.timedelta(days=day),opt_end = d)
-        # im_temp = im_test
         im_test = ee.Image(im_test.first()).unmask()
         if verbose:
             print(d - dt.timedelta(days=day))
@@ -63,7 +58,6 @@ def get_last(imagecol,s,e,ar,i,ee_dataset):
                 im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13, scale=100,tileScale=8) #TODO: Sätt maxPixels så att alla får samma storlek?
                 if (np.array(im_test.getInfo().get('tropospheric_NO2_column_number_density')).mean() > 0):
                     found_last = True
-                    #TODO: CHECK IF RISK FOR DUPLICATES HERE.
                     ### Fetch for all combinations of datasets and bands in ee_dataset
                     dftemp = pd.DataFrame()
                     for j in range(0, len(ee_dataset)):
@@ -89,10 +83,6 @@ def get_last(imagecol,s,e,ar,i,ee_dataset):
                     if verbose:
                         print('Found data on date: '+str(d - dt.timedelta(days=day)))
                         print('For location: ' + str(i) + '. Shape: ' + str(dftemp.shape))
-                        #print('Indicies for dftemp are: '+str(dftemp.index))
-                    # dftempp = dftemp
-                    # dftemp = dftemp.pivot_table(values='pixel_value', index=['id','date','measurement', 'latitude'],
-                    #                             columns='longitude').reset_index().fillna(method='pad').melt()
                     return dftemp,date
                 else:
                     day += 1
@@ -114,7 +104,7 @@ def get_data(locations,country,start,end):
         location = re.get('https://api.openaq.org/v1/locations/' + str(i))
         if location.status_code == 200:
             l = location.json()['results']['location']
-            if verbose: #TODO: Same location is fetched twice? TX-1: Ashgabat & SG-1: SPARTAN - NUS. Different dates for each time?
+            if verbose:
                 print('Fetching location: '+str(i) + ' called: '+str(l))
                 if l == 'SPARTAN - NUS':
                     print('Iteration through')
@@ -130,7 +120,7 @@ def get_data(locations,country,start,end):
                     'https://api.openaq.org/v1/measurements?coordinates=' + str(templat) + ',' + str(templon) +'&date_from='+
                     dt.datetime.strftime(dt.datetime.strptime(date, '%Y-%m-%d %H:%M') - dt.timedelta(hours=1), '%Y-%m-%d %H:%M')+
                     '&date_to='+dt.datetime.strftime(dt.datetime.strptime(date, '%Y-%m-%d %H:%M') + dt.timedelta(hours=1), '%Y-%m-%d %H:%M')+
-                    '&radius=10000&parameter=no2&limit=1000') #TODO: Behöver det vara dagar och inte timmar diff för att hitta
+                    '&radius=10000&parameter=no2&limit=1000')
                 if measurements.status_code == 200:
                     measurements = pd.DataFrame(measurements.json()['results'])
                     dfm = dfm.append(measurements)
@@ -153,7 +143,6 @@ def get_data(locations,country,start,end):
                 df = df[(df.date_x - df.date_y)== (df.date_x - df.date_y).min()].drop(['date_y','coordinates'],axis='columns')
                 dftot = dftot.append(df)
             dftot = dftot.dropna(axis='rows').drop_duplicates()
-            #dftot = dftot.drop('coordinates',axis='columns').drop_duplicates()
             locations[['longitude','latitude']] = locations.coordinates.apply(pd.Series)
 
             if True:
@@ -200,23 +189,22 @@ def get_data(locations,country,start,end):
 
 countries = re.get('https://api.openaq.org/v1/countries')
 countries = pd.DataFrame(countries.json()['results'])
-# countries.code.unique()
-# countries = ['SE','NO','DK','DE','NL','UK']
-# countries = ['DK','DE','NL','UK']
-# countries = ['DK','DE','NL','UK']
+
+### Define which date ranges to loop the data fetching through.
 verbose = True
-# EXECUTE PER COUNTRY
 start_date = '2020-06-01'
 delta = 16
 end_date = '2020-11-01'
 i = 1
+start_country = 80
+end_country = 94
 while dt.datetime.strptime(end_date,'%Y-%m-%d') > dt.datetime.strptime(start_date,'%Y-%m-%d')+dt.timedelta(days=i*delta):
     start = dt.datetime.strftime(dt.datetime.strptime(start_date, '%Y-%m-%d') + dt.timedelta(days=(i - 1) * delta),
                                  '%Y-%m-%d')
     end = dt.datetime.strftime(dt.datetime.strptime(start_date, '%Y-%m-%d') + dt.timedelta(days=i * delta), '%Y-%m-%d')
     if verbose:
         print('Fetching for date range: ' + str(start) + ' to ' + str(end))
-    for c in countries.sort_values(by='locations',axis='rows', ascending=False)[80:94].code:
+    for c in countries.sort_values(by='locations',axis='rows', ascending=False)[start_country:end_country].code:
         locations = re.get('https://api.openaq.org/v1/locations?country[]='+str(c))
         if locations.status_code == 200:
             locations = pd.DataFrame(locations.json()['results'])

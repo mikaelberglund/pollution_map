@@ -1,7 +1,6 @@
 from keras import models, optimizers, backend
 from keras.layers import core, convolutional, pooling
 from sklearn import model_selection
-from sklearn.neural_network import MLPRegressor
 import numpy as np
 import glob
 import pandas as pd
@@ -11,14 +10,12 @@ from datetime import datetime
 from skimage.util import random_noise
 import matplotlib.pyplot as plt
 from sklearn import tree, linear_model,svm
-from sklearn.linear_model import SGDRegressor
 from sklearn.metrics import log_loss, mean_squared_error
-from sklearn.ensemble import AdaBoostRegressor
 
 
 from codecarbon import EmissionsTracker
 tracker = EmissionsTracker()
-tracker.start()
+tracker.start() #Start tracking energy use.
 def flipud_8D(x,y,x_temp,y_temp):
     x = np.append(x,x_temp[:, ::-1, :, :],0)
     y = np.append(y, y_temp, 0)
@@ -65,8 +62,6 @@ if True:
         else:
             print('Error: Train file has wrong dimensions: '+str(f))
         t += 1
-    # for f in y_files[1:]:
-    #     y_train = np.append(y_train, np.load(f), axis=0)
 local_project_path = '/'
 
 print('Number of training images: '+str(x_train.shape[0]))
@@ -118,7 +113,7 @@ logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S") + ' x len is
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir)
 
 reg_model = 'CNN'
-if reg_model == 'CNN': #CNN initial architecture
+if reg_model == 'CNN':
     model = models.Sequential()
     model.add(convolutional.Convolution2D(4, 3, 3, input_shape=(x_train.shape[1:4]), activation='relu'))
     model.add(pooling.MaxPooling2D(pool_size=(2, 2)))
@@ -127,30 +122,19 @@ if reg_model == 'CNN': #CNN initial architecture
     model.add(core.Dropout(0.4))
     model.add(core.Dense(30, activation='sigmoid'))
     model.add(core.Dropout(0.4))
-    # With CNN ((4,4,3),dense(50),dropout(0.4),dense(30),dropout(0.4) the RMSE is 0.07082193547898374
+    # With CNN (Convolution2D(4,4,3),MaxPooling2D(2,2),dense(50),dropout(0.4),dense(30),dropout(0.4) the RMSE is 0.7
 if (reg_model=='NN')|(reg_model=='lin'): #Flatten from 8D image to array
     x_train = x_train.reshape([x_train.shape[0],x_train.shape[1]*x_train.shape[2]*x_train.shape[3]])
     x_test = x_test.reshape([x_test.shape[0],x_test.shape[1]*x_test.shape[2]*x_test.shape[3]])
-
-# x_test = x_test.reshape([x_test.shape[0],x_test.shape[1]*x_test.shape[2]*x_test.shape[3]])
-# model = models.Sequential()
-# model.add(core.Dense(4000, activation='sigmoid',input_shape=x_train.shape))
-# model.add(core.Dropout(0.3))
-# model.add(core.Dense(2000, activation='sigmoid'))
-# model.add(core.Dropout(0.1))
-# model.add(core.Dense(100, activation='sigmoid'))
-# model.add(core.Dropout(0.1))
-# model.add(core.Dense(200, activation='sigmoid'))
-# model.add(core.Dropout(0.1))
 if (reg_model == 'CNN')|(reg_model=='NN'):
     model.add(core.Dense(1))
-    # model.compile(optimizer=optimizers.Adam(lr=1e-04), loss='mean_squared_error')
     model.compile(optimizer=optimizers.SGD(), loss='mean_squared_error')
     history = model.fit(x_train, y_train,validation_split=0.1, batch_size=30, epochs=50,
                         callbacks=[tensorboard_callback],verbose=True)
     #score = model.evaluate(x=x_test, y=y_test, batch_size=30, verbose=1)
     pred = model.predict(x_test)
 if (reg_model == 'lin'):
+    ### Testing different regression models from Scikit-Learn
     # reg = tree.DecisionTreeRegressor() # Fairly good results! RMSE: 0.09
     #reg = AdaBoostRegressor(tree.DecisionTreeRegressor(max_depth=4), n_estimators=300) # Bad: RMSE: 1.19
     #reg = linear_model.LinearRegression() # Useless RMSE: 3.6579e+16
@@ -164,15 +148,10 @@ if (reg_model == 'lin'):
 
 loss = mean_squared_error(y_test, pred)
 print('RMSE: '+str(loss))
-#ax = sns.regplot(x=y_test,y=pred[:,0])
 truth = np.array([])
 prediction = np.array([])
 number = np.array([])
-#fig = plt.figure()
 for i in range(0, x_test.shape[0]):
-    # truth = np.append(truth, np.full(shape=x_test[i, :, :, :].flatten().shape, fill_value=y_test[i]))
-    # prediction = np.append(prediction, np.full(shape=x_test[i, :, :, :].flatten().shape, fill_value=pred[i, 0]))
-    # number = np.append(number, np.full(shape=x_test[i, :, :, :].flatten().shape, fill_value=i))
     truth = np.append(truth, np.full(shape=x_test[i, :].flatten().shape, fill_value=y_test[i]))
     prediction = np.append(prediction, np.full(shape=x_test[i, :].flatten().shape, fill_value=pred[i]))
     number = np.append(number, np.full(shape=x_test[i, :].flatten().shape, fill_value=i))
@@ -200,10 +179,3 @@ tracker.stop()
 print('Done and done!')
 
 
-# history = model.fit_generator(
-#     generate_samples(x_train, local_data_path),
-#     samples_per_epoch=x_train.shape[0],
-#     nb_epoch=30,
-#     validation_data=generate_samples(x_test, local_data_path, augment=False),
-# nb_val_samples = x_test.shape[0],
-# )
