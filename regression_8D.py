@@ -10,7 +10,7 @@ from datetime import datetime
 from skimage.util import random_noise
 import matplotlib.pyplot as plt
 from sklearn import tree, linear_model,svm
-from sklearn.metrics import log_loss, mean_squared_error
+from sklearn.metrics import log_loss, mean_squared_error, mean_absolute_error
 
 
 from codecarbon import EmissionsTracker
@@ -80,16 +80,16 @@ f = np.array(xin&yin)
 x_train = x_train[f]
 y_train = y_train[f]
 
+### STANDARDIZE DATA
+x_train = (x_train - np.mean(x_train))/np.std(x_train)
+y_train = (y_train - np.mean(y_train))/np.std(y_train)
+
 ### NORMALIZE
 xmax = x_train.max()
 ymax = y_train.max()
 x_train = x_train/xmax
 y_train = y_train/ymax
 print('Number of training images (excl. outliers): '+str(x_train.shape[0]))
-
-### STANDARDIZE DATA
-x_train = (x_train - np.mean(x_train))/np.std(x_train)
-y_train = (y_train - np.mean(y_train))/np.std(y_train)
 
 ### SPLIT INTO TRAIN & TEST
 x_train, x_test, y_train, y_test = model_selection.\
@@ -119,17 +119,31 @@ if reg_model == 'CNN':
     model.add(pooling.MaxPooling2D(pool_size=(2, 2)))
     model.add(core.Flatten())
     model.add(core.Dense(50, activation='sigmoid'))
-    model.add(core.Dropout(0.4))
-    model.add(core.Dense(30, activation='sigmoid'))
-    model.add(core.Dropout(0.4))
+    model.add(core.Dropout(0.2))
+    model.add(core.Dense(25, activation='sigmoid'))
+    model.add(core.Dropout(0.1))
+    model.add(core.Dense(10, activation='sigmoid'))
+    model.add(core.Dropout(0.1))
+    model.add(core.Dense(10, activation='sigmoid'))
+    model.add(core.Dropout(0.1))
+    model.add(core.Dense(10, activation='sigmoid'))
+    model.add(core.Dropout(0.1))
+    # model.add(core.Dense(10, activation='sigmoid'))
+    # model.add(core.Dropout(0.1))
+    # model.add(core.Dense(10, activation='sigmoid'))
+    # model.add(core.Dropout(0.1))
+    # model.add(core.Dense(10, activation='sigmoid'))
+    # model.add(core.Dropout(0.1))
+    model.add(core.Dense(10, activation='sigmoid'))
+    model.add(core.Dropout(0.1))
     # With CNN (Convolution2D(4,4,3),MaxPooling2D(2,2),dense(50),dropout(0.4),dense(30),dropout(0.4) the RMSE is 0.7
 if (reg_model=='NN')|(reg_model=='lin'): #Flatten from 8D image to array
     x_train = x_train.reshape([x_train.shape[0],x_train.shape[1]*x_train.shape[2]*x_train.shape[3]])
     x_test = x_test.reshape([x_test.shape[0],x_test.shape[1]*x_test.shape[2]*x_test.shape[3]])
 if (reg_model == 'CNN')|(reg_model=='NN'):
-    model.add(core.Dense(1))
-    model.compile(optimizer=optimizers.SGD(), loss='mean_squared_error')
-    history = model.fit(x_train, y_train,validation_split=0.1, batch_size=30, epochs=50,
+    model.add(core.Dense(1,activation='sigmoid'))
+    model.compile(optimizer=optimizers.SGD(), loss='mean_squared_logarithmic_error')
+    history = model.fit(x_train, y_train,validation_split=0.1, batch_size=30, epochs=25,
                         callbacks=[tensorboard_callback],verbose=True)
     #score = model.evaluate(x=x_test, y=y_test, batch_size=30, verbose=1)
     pred = model.predict(x_test)
@@ -141,12 +155,12 @@ if (reg_model == 'lin'):
     #reg = svm.SVR() # Bad results! RMSE: 0.8
     #reg = SGDRegressor() #Useless! RMSE: 54007550816275
     #reg = linear_model.Lasso() #Bad results! RMSE: 1.0
-    reg = linear_model.ElasticNet(random_state=0) #Bad! RMSE: 0.079532
     #reg = linear_model.Ridge(alpha=.5) #Good! RMSE: 0.044578
+    reg = linear_model.ElasticNet(random_state=0) #Bad! RMSE: 0.079532
     reg = reg.fit(x_train, y_train)
     pred = reg.predict(x_test)
 
-loss = mean_squared_error(y_test, pred)
+loss = mean_squared_error(y_test, pred, squared=False)
 print('RMSE: '+str(loss))
 truth = np.array([])
 prediction = np.array([])
