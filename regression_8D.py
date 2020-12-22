@@ -9,8 +9,9 @@ import tensorflow as tf
 from datetime import datetime
 from skimage.util import random_noise
 import matplotlib.pyplot as plt
-from sklearn import tree, linear_model,svm
-from sklearn.metrics import log_loss, mean_squared_error, mean_absolute_error
+from sklearn import linear_model
+from sklearn.metrics import mean_squared_error
+from keras.layers import ReLU, ReLU
 
 
 from codecarbon import EmissionsTracker
@@ -109,8 +110,8 @@ x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp)
 x_temp1, y_temp1 = flipudlr_8D(x_train,y_train,x_temp,y_temp)
 x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp)
 print('Number of training images (after augmentation, excl. outliers): '+str(x_train.shape[0]))
-logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S") + ' x len is '+ str(x_train.shape[0])
-tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir)
+logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S")
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir,profile_batch=0)
 
 reg_model = 'CNN'
 if reg_model == 'CNN':
@@ -118,32 +119,42 @@ if reg_model == 'CNN':
     model.add(convolutional.Convolution2D(4, 3, 3, input_shape=(x_train.shape[1:4]), activation='relu'))
     model.add(pooling.MaxPooling2D(pool_size=(2, 2)))
     model.add(core.Flatten())
-    model.add(core.Dense(50, activation='sigmoid'))
-    model.add(core.Dropout(0.2))
-    model.add(core.Dense(25, activation='sigmoid'))
+    model.add(core.Dense(200))
+    model.add(ReLU())
     model.add(core.Dropout(0.1))
-    model.add(core.Dense(10, activation='sigmoid'))
+    model.add(core.Dense(100))
+    model.add(ReLU())
     model.add(core.Dropout(0.1))
-    model.add(core.Dense(10, activation='sigmoid'))
+    model.add(core.Dense(80))
+    model.add(ReLU())
     model.add(core.Dropout(0.1))
-    model.add(core.Dense(10, activation='sigmoid'))
+    model.add(core.Dense(40))
+    model.add(ReLU())
     model.add(core.Dropout(0.1))
-    # model.add(core.Dense(10, activation='sigmoid'))
-    # model.add(core.Dropout(0.1))
-    # model.add(core.Dense(10, activation='sigmoid'))
-    # model.add(core.Dropout(0.1))
-    # model.add(core.Dense(10, activation='sigmoid'))
-    # model.add(core.Dropout(0.1))
-    model.add(core.Dense(10, activation='sigmoid'))
+    model.add(core.Dense(20))
+    model.add(ReLU())
+    model.add(core.Dropout(0.1))
+    model.add(core.Dense(10))
+    model.add(ReLU())
+    model.add(core.Dropout(0.1))
+    model.add(core.Dense(10))
+    model.add(ReLU())
+    model.add(core.Dropout(0.1))
+    model.add(core.Dense(10))
+    model.add(ReLU())
+    model.add(core.Dropout(0.1))
+    model.add(core.Dense(10))
+    model.add(ReLU())
     model.add(core.Dropout(0.1))
     # With CNN (Convolution2D(4,4,3),MaxPooling2D(2,2),dense(50),dropout(0.4),dense(30),dropout(0.4) the RMSE is 0.7
 if (reg_model=='NN')|(reg_model=='lin'): #Flatten from 8D image to array
     x_train = x_train.reshape([x_train.shape[0],x_train.shape[1]*x_train.shape[2]*x_train.shape[3]])
     x_test = x_test.reshape([x_test.shape[0],x_test.shape[1]*x_test.shape[2]*x_test.shape[3]])
 if (reg_model == 'CNN')|(reg_model=='NN'):
-    model.add(core.Dense(1,activation='sigmoid'))
+    model.add(core.Dense(1))
+    model.add(ReLU())
     model.compile(optimizer=optimizers.SGD(), loss='mean_squared_logarithmic_error')
-    history = model.fit(x_train, y_train,validation_split=0.1, batch_size=30, epochs=25,
+    history = model.fit(x_train, y_train,validation_split=0.2, batch_size=30, epochs=50,
                         callbacks=[tensorboard_callback],verbose=True)
     #score = model.evaluate(x=x_test, y=y_test, batch_size=30, verbose=1)
     pred = model.predict(x_test)
