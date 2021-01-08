@@ -9,7 +9,7 @@ import tensorflow as tf
 from datetime import datetime
 from skimage.util import random_noise
 import matplotlib.pyplot as plt
-from sklearn import linear_model
+from sklearn import linear_model, tree
 from sklearn.metrics import mean_squared_error
 from keras.layers import ReLU, ReLU
 
@@ -34,8 +34,10 @@ def noise_8D(x,y,x_temp,y_temp):
     y = np.append(y_temp, y, 0)
     return x,y
 
+path = 'Pollution_8DXL/*.npy'
+# path = 'Pollution_8D/*.npy'
 if False:
-    filelist = glob.glob('Pollution_8D/*.pkl')
+    filelist = glob.glob(path)
     dfm_files = list(filter(lambda k: 'dfm' in k, filelist))
     dfs_files = list(filter(lambda k: 'dfs' in k, filelist))
     dfm = pd.read_pickle(dfm_files[0])
@@ -46,18 +48,20 @@ if False:
         dfs = dfs.append(pd.read_pickle(f))
     print('Hi')
 if True:
-    filelist = glob.glob('Pollution_8D/*.npy')
+    filelist = glob.glob(path)
     x_files = list(filter(lambda k: 'x_train' in k, filelist))
     y_files = list(filter(lambda k: 'y_train' in k, filelist))
     x_files.sort()
     y_files.sort()
     t = 0
-    while np.load(x_files[t]).shape[1:] != (23, 45, 8):
+    #while np.load(x_files[t]).shape[1:] != (23, 45, 8):
+    while np.load(x_files[t]).shape[1:] != (32, 64, 8):
         t += 1
     x_train = np.load(x_files[t])
     y_train = np.load(y_files[t])
     for f in x_files[t+1:]:
-        if np.shape(np.load(f))[1:] == (23, 45, 8):
+        #if np.shape(np.load(f))[1:] == (23, 45, 8):
+        if np.shape(np.load(f))[1:] == (32, 64, 8):
             x_train = np.append(x_train, np.load(f), axis=0)
             y_train = np.append(y_train, np.load(y_files[t+1]), axis=0)
         else:
@@ -70,20 +74,22 @@ print('Number of training images: '+str(x_train.shape[0]))
 x_train = np.nan_to_num(x_train)
 y_train = np.nan_to_num(y_train)
 ### OUTLIER REMOVAL
-df = pd.DataFrame([x_train.mean(axis=1).mean(axis=1)[:,0],y_train]).T
-df = df.rename({0:'x',1:'y'},axis='columns')
-quantiles = 0.1
-xin = np.logical_and(df.x >= np.quantile(a=df.x,q=quantiles),df.x <= np.quantile(a=df.x,q=1-quantiles))
-xin = np.logical_and(xin,df.x != 0)
-yin = np.logical_and(df.y >= np.quantile(a=df.y,q=quantiles),df.y <= np.quantile(a=df.y,q=1-quantiles))
-yin = np.logical_and(yin,df.y != 0)
-f = np.array(xin&yin)
-x_train = x_train[f]
-y_train = y_train[f]
+if True:
+    df = pd.DataFrame([x_train.mean(axis=1).mean(axis=1)[:,0],y_train]).T
+    df = df.rename({0:'x',1:'y'},axis='columns')
+    quantiles = 0.001
+    xin = np.logical_and(df.x >= np.quantile(a=df.x,q=quantiles),df.x <= np.quantile(a=df.x,q=1-quantiles))
+    xin = np.logical_and(xin,df.x != 0)
+    yin = np.logical_and(df.y >= np.quantile(a=df.y,q=quantiles),df.y <= np.quantile(a=df.y,q=1-quantiles))
+    yin = np.logical_and(yin,df.y != 0)
+    f = np.array(xin&yin)
+    x_train = x_train[f]
+    y_train = y_train[f]
 
 ### STANDARDIZE DATA
-x_train = (x_train - np.mean(x_train))/np.std(x_train)
-y_train = (y_train - np.mean(y_train))/np.std(y_train)
+if False:
+    x_train = (x_train - np.mean(x_train))/np.std(x_train)
+    y_train = (y_train - np.mean(y_train))/np.std(y_train)
 
 ### NORMALIZE
 xmax = x_train.max()
@@ -113,7 +119,7 @@ print('Number of training images (after augmentation, excl. outliers): '+str(x_t
 logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir,profile_batch=0)
 
-reg_model = 'CNN'
+reg_model = 'NN'
 if reg_model == 'CNN':
     model = models.Sequential()
     model.add(convolutional.Convolution2D(4, 3, 3, input_shape=(x_train.shape[1:4]), activation='relu'))
@@ -150,6 +156,17 @@ if reg_model == 'CNN':
 if (reg_model=='NN')|(reg_model=='lin'): #Flatten from 8D image to array
     x_train = x_train.reshape([x_train.shape[0],x_train.shape[1]*x_train.shape[2]*x_train.shape[3]])
     x_test = x_test.reshape([x_test.shape[0],x_test.shape[1]*x_test.shape[2]*x_test.shape[3]])
+if (reg_model == 'NN'):
+    model = models.Sequential()
+    model.add(core.Dense(200, input_shape=x_train.shape))
+    model.add(ReLU())
+    # model.add(core.Dropout(0.1))
+    # model.add(core.Dense(100))
+    # model.add(ReLU())
+    model.add(core.Dropout(0.3))
+    model.add(core.Dense(50))
+    model.add(ReLU())
+    model.add(core.Dropout(0.3))
 if (reg_model == 'CNN')|(reg_model=='NN'):
     model.add(core.Dense(1))
     model.add(ReLU())
@@ -160,14 +177,14 @@ if (reg_model == 'CNN')|(reg_model=='NN'):
     pred = model.predict(x_test)
 if (reg_model == 'lin'):
     ### Testing different regression models from Scikit-Learn
-    # reg = tree.DecisionTreeRegressor() # Fairly good results! RMSE: 0.09
-    #reg = AdaBoostRegressor(tree.DecisionTreeRegressor(max_depth=4), n_estimators=300) # Bad: RMSE: 1.19
-    #reg = linear_model.LinearRegression() # Useless RMSE: 3.6579e+16
-    #reg = svm.SVR() # Bad results! RMSE: 0.8
-    #reg = SGDRegressor() #Useless! RMSE: 54007550816275
-    #reg = linear_model.Lasso() #Bad results! RMSE: 1.0
-    #reg = linear_model.Ridge(alpha=.5) #Good! RMSE: 0.044578
-    reg = linear_model.ElasticNet(random_state=0) #Bad! RMSE: 0.079532
+    reg = tree.DecisionTreeRegressor() # Fairly good results! RMSE 0.4
+    #reg = AdaBoostRegressor(tree.DecisionTreeRegressor(max_depth=4), n_estimators=300) # Bad
+    #reg = linear_model.LinearRegression() # Useless
+    #reg = svm.SVR() # Bad results!
+    #reg = SGDRegressor() #Useless!
+    #reg = linear_model.Lasso() #Bad results!
+    #reg = linear_model.Ridge(alpha=.5) #Good! RMSE: 0.38
+    #reg = linear_model.ElasticNet(random_state=0) #Bad!
     reg = reg.fit(x_train, y_train)
     pred = reg.predict(x_test)
 
@@ -187,6 +204,8 @@ if False: #CAREFUL: Very slow plotting time if a large sample size is used.
 elif True:
     ax = sns.regplot(x=y_test, y=pred)
     ax.set(ylabel="Prediction", xlabel="Truth")
+    ax.set_ylim(-1,1)
+    ax.set_xlim(-1, 1)
 else:
     #g = sns.jointplot(hue=x_test[:,:,:,:].flatten(),x=truth,y=prediction)
     g = sns.jointplot(hue=x_test.flatten(), x=truth, y=prediction)
