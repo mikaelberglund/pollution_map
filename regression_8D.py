@@ -87,7 +87,7 @@ if True:
     y_train = y_train[f]
 
 ### STANDARDIZE DATA
-if False:
+if True:
     x_train = (x_train - np.mean(x_train))/np.std(x_train)
     y_train = (y_train - np.mean(y_train))/np.std(y_train)
 
@@ -119,7 +119,7 @@ print('Number of training images (after augmentation, excl. outliers): '+str(x_t
 logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir,profile_batch=0)
 
-reg_model = 'NN'
+reg_model = 'CNN'
 if reg_model == 'CNN':
     model = models.Sequential()
     model.add(convolutional.Convolution2D(4, 3, 3, input_shape=(x_train.shape[1:4]), activation='relu'))
@@ -160,30 +160,30 @@ if (reg_model == 'NN'):
     model = models.Sequential()
     model.add(core.Dense(200, input_shape=x_train.shape))
     model.add(ReLU())
-    # model.add(core.Dropout(0.1))
-    # model.add(core.Dense(100))
-    # model.add(ReLU())
-    model.add(core.Dropout(0.3))
+    model.add(core.Dropout(0.5))
     model.add(core.Dense(50))
     model.add(ReLU())
-    model.add(core.Dropout(0.3))
-if (reg_model == 'CNN')|(reg_model=='NN'):
-    model.add(core.Dense(1))
+    model.add(core.Dropout(0.5))
+    model.add(core.Dense(10))
     model.add(ReLU())
+    model.add(core.Dropout(0.5))
+if (reg_model == 'CNN')|(reg_model=='NN'):
+    model.add(core.Dense(1,activation='relu'))
+    #model.add(ReLU())
     model.compile(optimizer=optimizers.SGD(), loss='mean_squared_logarithmic_error')
-    history = model.fit(x_train, y_train,validation_split=0.2, batch_size=30, epochs=50,
+    history = model.fit(x_train, y_train,validation_split=0.2, batch_size=30, epochs=100,
                         callbacks=[tensorboard_callback],verbose=True)
     #score = model.evaluate(x=x_test, y=y_test, batch_size=30, verbose=1)
     pred = model.predict(x_test)
 if (reg_model == 'lin'):
     ### Testing different regression models from Scikit-Learn
-    reg = tree.DecisionTreeRegressor() # Fairly good results! RMSE 0.4
+    # reg = tree.DecisionTreeRegressor() # Fairly good results! RMSE 0.4
     #reg = AdaBoostRegressor(tree.DecisionTreeRegressor(max_depth=4), n_estimators=300) # Bad
     #reg = linear_model.LinearRegression() # Useless
     #reg = svm.SVR() # Bad results!
     #reg = SGDRegressor() #Useless!
     #reg = linear_model.Lasso() #Bad results!
-    #reg = linear_model.Ridge(alpha=.5) #Good! RMSE: 0.38
+    reg = linear_model.Ridge(alpha=.5) #Good! RMSE: 0.38
     #reg = linear_model.ElasticNet(random_state=0) #Bad!
     reg = reg.fit(x_train, y_train)
     pred = reg.predict(x_test)

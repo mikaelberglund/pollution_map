@@ -42,7 +42,11 @@ def get_last(imagecol,s,e,ar,i,ee_dataset):
     test = np.array(imagecol.max().reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13, scale=70,
                                                 tileScale=4).getInfo().get('tropospheric_NO2_column_number_density'))
     if test.shape[0] > 0:
+    # if True:
         if test.mean() > 0:
+        # if np.array(imagecol.max().reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13, scale=70,
+        #                                             tileScale=4).getInfo().get(
+        #     'tropospheric_NO2_column_number_density')).mean() > 0:
             found_last = False
             day = 1
             d = dt.datetime.strptime(e, '%Y-%m-%d')
@@ -51,49 +55,54 @@ def get_last(imagecol,s,e,ar,i,ee_dataset):
                 im_test = ee.Image(im_test.first()).unmask()
                 if verbose:
                     print(d - dt.timedelta(days=day))
-                if (im_test.getInfo() is not None):
-                    ds = dt.datetime.strftime(d - dt.timedelta(days=day), '%Y-%m-%d')
-                    testds = dt.datetime.strptime(ds,'%Y-%m-%d')>=dt.datetime.strptime(s,'%Y-%m-%d')
-                     # TODO: Sätt maxPixels så att alla får samma storlek?
-                    if testds:
-                        date = dt.datetime.utcfromtimestamp(ee.Date(im_test.get('system:time_start')).getInfo()['value'] / 1000.)\
-                            .strftime('%Y-%m-%d %H:%M')
-                        im_test = im_test.addBands(ee.Image.pixelLonLat())
-                        im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13, scale=70,tileScale=4) #TODO: Sätt maxPixels så att alla får samma storlek?
-                        if (np.array(im_test.getInfo().get('tropospheric_NO2_column_number_density')).mean() > 0):
-                            found_last = True
-                            ### Fetch for all combinations of datasets and bands in ee_dataset
-                            dftemp = pd.DataFrame()
-                            for j in range(0, len(ee_dataset)):
-                                ds = ee_dataset.loc[j, :].dataset
-                                b = ee_dataset.loc[j, :].bands
-                                IC = get_IC(ds,ar,s,e,b)
-                                im_test = IC.filterDate(start=d - dt.timedelta(days=day), opt_end=d)
-                                im_test = ee.Image(im_test.first()).unmask()
-                                im_test = im_test.addBands(ee.Image.pixelLonLat())
-                                im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13,
-                                                               scale=70, tileScale=4)
-                                if False:
-                                    print('Value has shape: '+str(np.shape(im_test.getInfo().get(b)))+' and lat has: ' +
-                                          str(np.shape(im_test.getInfo().get('latitude'))))
-                                if np.shape(im_test.getInfo().get(b)) == np.shape(im_test.getInfo().get('latitude')):
-                                    dft = pd.DataFrame(im_test.getInfo())
-                                    dft['date'] = date
-                                    dft['id'] = i
-                                    val = dft.columns.drop(['latitude', 'longitude', 'date', 'id'])[0]
-                                    dft['measurement'] = val
-                                    dft = dft.rename(columns={val: 'pixel_value'})
-                                    dftemp = dftemp.append(dft,ignore_index=True)
-                            if verbose:
-                                print('Found data on date: '+str(d - dt.timedelta(days=day)))
-                                print('For location: ' + str(i) + '. Shape: ' + str(dftemp.shape))
-                            return dftemp,date
-                        else:
+                try:
+                    if (im_test.getInfo() is not None):
+                        ds = dt.datetime.strftime(d - dt.timedelta(days=day), '%Y-%m-%d')
+                        testds = dt.datetime.strptime(ds,'%Y-%m-%d')>=dt.datetime.strptime(s,'%Y-%m-%d')
+                         # TODO: Sätt maxPixels så att alla får samma storlek?
+                        if testds:
+                            date = dt.datetime.utcfromtimestamp(ee.Date(im_test.get('system:time_start')).getInfo()['value'] / 1000.)\
+                                .strftime('%Y-%m-%d %H:%M')
+                            im_test = im_test.addBands(ee.Image.pixelLonLat())
+                            im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13, scale=70,tileScale=4) #TODO: Sätt maxPixels så att alla får samma storlek?
+                            if (np.array(im_test.getInfo().get('tropospheric_NO2_column_number_density')).mean() > 0):
+                                found_last = True
+                                ### Fetch for all combinations of datasets and bands in ee_dataset
+                                dftemp = pd.DataFrame()
+                                for j in range(0, len(ee_dataset)):
+                                    ds = ee_dataset.loc[j, :].dataset
+                                    b = ee_dataset.loc[j, :].bands
+                                    IC = get_IC(ds,ar,s,e,b)
+                                    im_test = IC.filterDate(start=d - dt.timedelta(days=day), opt_end=d)
+                                    im_test = ee.Image(im_test.first()).unmask()
+                                    im_test = im_test.addBands(ee.Image.pixelLonLat())
+                                    im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13,
+                                                                   scale=70, tileScale=4)
+                                    if False:
+                                        print('Value has shape: '+str(np.shape(im_test.getInfo().get(b)))+' and lat has: ' +
+                                              str(np.shape(im_test.getInfo().get('latitude'))))
+                                    if np.shape(im_test.getInfo().get(b)) == np.shape(im_test.getInfo().get('latitude')):
+                                        dft = pd.DataFrame(im_test.getInfo())
+                                        dft['date'] = date
+                                        dft['id'] = i
+                                        val = dft.columns.drop(['latitude', 'longitude', 'date', 'id'])[0]
+                                        dft['measurement'] = val
+                                        dft = dft.rename(columns={val: 'pixel_value'})
+                                        dftemp = dftemp.append(dft,ignore_index=True)
+                                if verbose:
+                                    print('Found data on date: '+str(d - dt.timedelta(days=day)))
+                                    print('For location: ' + str(i) + '. Shape: ' + str(dftemp.shape))
+                                return dftemp,date
+                            else:
+                                day += 1
+                        elif (im_test.getInfo() is None) & testds:
                             day += 1
-                    elif (im_test.getInfo() is None) & testds:
-                        day += 1
-                    elif ~testds:
-                        return pd.DataFrame(columns=['latitude','longitude','date','location']),0
+                        elif ~testds:
+                            return pd.DataFrame(columns=['latitude','longitude','date','location']),0
+                except:
+                    if verbose:
+                        print('No data found for location: ' + str(i))
+                    return pd.DataFrame(columns=['latitude', 'longitude', 'date', 'location']), 0
         else:
             if verbose:
                 print('No data found for location: '+ str(i))
@@ -124,6 +133,10 @@ def get_data(locations,country,start,end):
             dftemp = pd.read_pickle('locations.pkl')
             templat = dftemp[dftemp.id == i].coordinates.values[0].get('latitude')
             templon = dftemp[dftemp.id == i].coordinates.values[0].get('longitude')
+            # measurements = re.get('https://api.openaq.org/v1/measurements?coordinates=' + str(templat) + ',' + str(
+            #     templon) + '&date_from=' + str(start) + '&date_to=' + str(
+            #     end) + '&radius=10000&parameter=no2&limit=1000')
+            # if len(measurements.json()['results']) > 0:
             temparea = ee.Geometry.Rectangle(templon + 2 * r, templat + r, templon - 2 * r, templat - r)
             landsat = get_IC(ee_dataset.loc[0,:][0],temparea,start,end,ee_dataset.loc[0,:][1])
             df,date = get_last(landsat,start, end, temparea,i,ee_dataset)
@@ -140,6 +153,8 @@ def get_data(locations,country,start,end):
                     dfm = dfm.append(measurements)
                 if False:
                     print('dfm: '+str(dfm.shape)+ ' & measurements: '+str(measurements.shape))
+            # elif len(measurements.json()['results']) == 0:
+            #     print('Error: Found zero measurements for location: '+str(i))
 
     if dfm.shape[0]>0:
         dfm.date = dfm.date.apply(pd.Series).utc
@@ -221,7 +236,7 @@ def get_loc(c):
         if locations.status_code == 200:
             dft = pd.DataFrame(locations.json()['results'])
         else:
-            t = 60
+            t = 60*5
             while locations.status_code != 200:
                 print('Pause fetching of location for '+str(t)+' seconds for location '+str(c))
                 time.sleep(t)
@@ -241,11 +256,11 @@ except:
 
 ### Define which date ranges to loop the data fetching through.
 verbose = True
-start_date = '2020-01-01'
+start_date = '2020-02-01'
 delta = 16
 end_date = '2020-12-21'
 i = 1
-start_country = 40
+start_country = 12
 end_country = 94
 while dt.datetime.strptime(end_date,'%Y-%m-%d') > dt.datetime.strptime(start_date,'%Y-%m-%d')+dt.timedelta(days=i*delta):
     start = dt.datetime.strftime(dt.datetime.strptime(start_date, '%Y-%m-%d') + dt.timedelta(days=(i - 1) * delta),
