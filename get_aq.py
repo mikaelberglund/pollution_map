@@ -55,54 +55,54 @@ def get_last(imagecol,s,e,ar,i,ee_dataset):
                 im_test = ee.Image(im_test.first()).unmask()
                 if verbose:
                     print(d - dt.timedelta(days=day))
-                try:
-                    if (im_test.getInfo() is not None):
-                        ds = dt.datetime.strftime(d - dt.timedelta(days=day), '%Y-%m-%d')
-                        testds = dt.datetime.strptime(ds,'%Y-%m-%d')>=dt.datetime.strptime(s,'%Y-%m-%d')
-                         # TODO: Sätt maxPixels så att alla får samma storlek?
-                        if testds:
-                            date = dt.datetime.utcfromtimestamp(ee.Date(im_test.get('system:time_start')).getInfo()['value'] / 1000.)\
-                                .strftime('%Y-%m-%d %H:%M')
-                            im_test = im_test.addBands(ee.Image.pixelLonLat())
-                            im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13, scale=70,tileScale=4) #TODO: Sätt maxPixels så att alla får samma storlek?
-                            if (np.array(im_test.getInfo().get('tropospheric_NO2_column_number_density')).mean() > 0):
-                                found_last = True
-                                ### Fetch for all combinations of datasets and bands in ee_dataset
-                                dftemp = pd.DataFrame()
-                                for j in range(0, len(ee_dataset)):
-                                    ds = ee_dataset.loc[j, :].dataset
-                                    b = ee_dataset.loc[j, :].bands
-                                    IC = get_IC(ds,ar,s,e,b)
-                                    im_test = IC.filterDate(start=d - dt.timedelta(days=day), opt_end=d)
-                                    im_test = ee.Image(im_test.first()).unmask()
-                                    im_test = im_test.addBands(ee.Image.pixelLonLat())
-                                    im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13,
-                                                                   scale=70, tileScale=4)
-                                    if False:
-                                        print('Value has shape: '+str(np.shape(im_test.getInfo().get(b)))+' and lat has: ' +
-                                              str(np.shape(im_test.getInfo().get('latitude'))))
-                                    if np.shape(im_test.getInfo().get(b)) == np.shape(im_test.getInfo().get('latitude')):
-                                        dft = pd.DataFrame(im_test.getInfo())
-                                        dft['date'] = date
-                                        dft['id'] = i
-                                        val = dft.columns.drop(['latitude', 'longitude', 'date', 'id'])[0]
-                                        dft['measurement'] = val
-                                        dft = dft.rename(columns={val: 'pixel_value'})
-                                        dftemp = dftemp.append(dft,ignore_index=True)
-                                if verbose:
-                                    print('Found data on date: '+str(d - dt.timedelta(days=day)))
-                                    print('For location: ' + str(i) + '. Shape: ' + str(dftemp.shape))
-                                return dftemp,date
-                            else:
-                                day += 1
-                        elif (im_test.getInfo() is None) & testds:
+                # try:
+                if (im_test.getInfo() is not None):
+                    ds = dt.datetime.strftime(d - dt.timedelta(days=day), '%Y-%m-%d')
+                    testds = dt.datetime.strptime(ds,'%Y-%m-%d')>=dt.datetime.strptime(s,'%Y-%m-%d')
+                     # TODO: Sätt maxPixels så att alla får samma storlek?
+                    if testds:
+                        date = dt.datetime.utcfromtimestamp(ee.Date(im_test.get('system:time_start')).getInfo()['value'] / 1000.)\
+                            .strftime('%Y-%m-%d %H:%M')
+                        im_test = im_test.addBands(ee.Image.pixelLonLat())
+                        im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13, scale=70,tileScale=4) #TODO: Sätt maxPixels så att alla får samma storlek?
+                        if (np.array(im_test.getInfo().get('tropospheric_NO2_column_number_density')).mean() > 0):
+                            found_last = True
+                            ### Fetch for all combinations of datasets and bands in ee_dataset
+                            dftemp = pd.DataFrame()
+                            for j in range(0, len(ee_dataset)):
+                                ds = ee_dataset.loc[j, :].dataset
+                                b = ee_dataset.loc[j, :].bands
+                                IC = get_IC(ds,ar,s,e,b)
+                                im_test = IC.filterDate(start=d - dt.timedelta(days=day), opt_end=d)
+                                im_test = ee.Image(im_test.first()).unmask()
+                                im_test = im_test.addBands(ee.Image.pixelLonLat())
+                                im_test = im_test.reduceRegion(reducer=ee.Reducer.toList(), geometry=ar, maxPixels=1e13,
+                                                               scale=70, tileScale=4)
+                                if False:
+                                    print('Value has shape: '+str(np.shape(im_test.getInfo().get(b)))+' and lat has: ' +
+                                          str(np.shape(im_test.getInfo().get('latitude'))))
+                                if np.shape(im_test.getInfo().get(b)) == np.shape(im_test.getInfo().get('latitude')):
+                                    dft = pd.DataFrame(im_test.getInfo())
+                                    dft['date'] = date
+                                    dft['id'] = i
+                                    val = dft.columns.drop(['latitude', 'longitude', 'date', 'id'])[0]
+                                    dft['measurement'] = val
+                                    dft = dft.rename(columns={val: 'pixel_value'})
+                                    dftemp = dftemp.append(dft,ignore_index=True)
+                            if verbose:
+                                print(str(datetime.datetime.now().strftime("%H:%M:%S"))+': Found data on date: '+str(d - dt.timedelta(days=day)))
+                                print('For location: ' + str(i) + '. Shape: ' + str(dftemp.shape))
+                            return dftemp,date
+                        else:
                             day += 1
-                        elif ~testds:
-                            return pd.DataFrame(columns=['latitude','longitude','date','location']),0
-                except:
-                    if verbose:
-                        print('No data found for location: ' + str(i))
-                    return pd.DataFrame(columns=['latitude', 'longitude', 'date', 'location']), 0
+                    elif (im_test.getInfo() is None) & testds:
+                        day += 1
+                    elif ~testds:
+                        return pd.DataFrame(columns=['latitude','longitude','date','location']),0
+                # except:
+                #     if verbose:
+                #         print('No data found for location: ' + str(i))
+                #     return pd.DataFrame(columns=['latitude', 'longitude', 'date', 'location']), 0
         else:
             if verbose:
                 print('No data found for location: '+ str(i))
@@ -217,21 +217,6 @@ def get_data(locations,country,start,end):
 def get_loc(c):
     dfl = pd.read_pickle('locations.pkl')
     if dfl[dfl.country == c].shape[0] == 0:
-        # try:
-        #     locations = re.get('https://api.openaq.org/v1/locations?country[]=' + str(c))
-        #     if locations.status_code == 200:
-        #         dft = pd.DataFrame(locations.json()['results'])
-        #     else:
-        #         dft = pd.DataFrame()
-        # except:
-        #     t = 60
-        #     print('Pause fetching of location for '+str(t)+' seconds for location '+str(c))
-        #     time.sleep(t)
-        #     locations = re.get('https://api.openaq.org/v1/locations?country[]=' + str(c))
-        #     if locations.status_code == 200:
-        #         dft = pd.DataFrame(locations.json()['results'])
-        #     else:
-        #         dft = pd.DataFrame()
         locations = re.get('https://api.openaq.org/v1/locations?country[]=' + str(c))
         if locations.status_code == 200:
             dft = pd.DataFrame(locations.json()['results'])
@@ -256,12 +241,13 @@ except:
 
 ### Define which date ranges to loop the data fetching through.
 verbose = True
-start_date = '2020-02-01'
+start_date = '2020-03-21'
 delta = 16
 end_date = '2020-12-21'
 i = 1
-start_country = 12
+start_country = 11
 end_country = 94
+j = start_country
 while dt.datetime.strptime(end_date,'%Y-%m-%d') > dt.datetime.strptime(start_date,'%Y-%m-%d')+dt.timedelta(days=i*delta):
     start = dt.datetime.strftime(dt.datetime.strptime(start_date, '%Y-%m-%d') + dt.timedelta(days=(i - 1) * delta),
                                  '%Y-%m-%d')
@@ -272,6 +258,12 @@ while dt.datetime.strptime(end_date,'%Y-%m-%d') > dt.datetime.strptime(start_dat
         # locations = re.get('https://api.openaq.org/v1/locations?country[]='+str(c))
         # if locations.status_code == 200:
         #     locations = pd.DataFrame(locations.json()['results'])
+        if verbose:
+            print('Fetching country number '+str(j)+'/'+str(end_country))
+            if j<end_country:
+                j += 1
+            else:
+                j = start_country
         locations = get_loc(c)
         if locations.shape[0] > 0:
             get_data(locations,c,start,end)

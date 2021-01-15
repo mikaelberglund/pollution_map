@@ -77,7 +77,7 @@ y_train = np.nan_to_num(y_train)
 if True:
     df = pd.DataFrame([x_train.mean(axis=1).mean(axis=1)[:,0],y_train]).T
     df = df.rename({0:'x',1:'y'},axis='columns')
-    quantiles = 0.001
+    quantiles = 0.1
     xin = np.logical_and(df.x >= np.quantile(a=df.x,q=quantiles),df.x <= np.quantile(a=df.x,q=1-quantiles))
     xin = np.logical_and(xin,df.x != 0)
     yin = np.logical_and(df.y >= np.quantile(a=df.y,q=quantiles),df.y <= np.quantile(a=df.y,q=1-quantiles))
@@ -87,7 +87,8 @@ if True:
     y_train = y_train[f]
 
 ### STANDARDIZE DATA
-if True:
+standardize = True
+if standardize:
     x_train = (x_train - np.mean(x_train))/np.std(x_train)
     y_train = (y_train - np.mean(y_train))/np.std(y_train)
 
@@ -100,7 +101,7 @@ print('Number of training images (excl. outliers): '+str(x_train.shape[0]))
 
 ### SPLIT INTO TRAIN & TEST
 x_train, x_test, y_train, y_test = model_selection.\
-    train_test_split(x_train, y_train, test_size=.2)
+    train_test_split(x_train, y_train, test_size=.1)
 
 ### AUGMENT DATA
 x_temp = x_train
@@ -116,75 +117,97 @@ x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp)
 x_temp1, y_temp1 = flipudlr_8D(x_train,y_train,x_temp,y_temp)
 x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp)
 print('Number of training images (after augmentation, excl. outliers): '+str(x_train.shape[0]))
-logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S")
+
+description = input('Add description to log name: ')
+logdir = "logs/scalars/" + datetime.now().strftime("%y%m%d-%H%M")+ ' '+ str(description)
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir,profile_batch=0)
 
-reg_model = 'CNN'
+reg_model = 'NN'
+
 if reg_model == 'CNN':
+    drop = 0.1
     model = models.Sequential()
     model.add(convolutional.Convolution2D(4, 3, 3, input_shape=(x_train.shape[1:4]), activation='relu'))
     model.add(pooling.MaxPooling2D(pool_size=(2, 2)))
     model.add(core.Flatten())
     model.add(core.Dense(200))
     model.add(ReLU())
-    model.add(core.Dropout(0.1))
+    model.add(core.Dropout(drop))
     model.add(core.Dense(100))
     model.add(ReLU())
-    model.add(core.Dropout(0.1))
+    model.add(core.Dropout(drop))
     model.add(core.Dense(80))
     model.add(ReLU())
-    model.add(core.Dropout(0.1))
+    model.add(core.Dropout(drop))
     model.add(core.Dense(40))
     model.add(ReLU())
-    model.add(core.Dropout(0.1))
+    model.add(core.Dropout(drop))
     model.add(core.Dense(20))
     model.add(ReLU())
-    model.add(core.Dropout(0.1))
+    model.add(core.Dropout(drop))
     model.add(core.Dense(10))
     model.add(ReLU())
-    model.add(core.Dropout(0.1))
+    model.add(core.Dropout(drop))
     model.add(core.Dense(10))
     model.add(ReLU())
-    model.add(core.Dropout(0.1))
+    model.add(core.Dropout(drop))
     model.add(core.Dense(10))
     model.add(ReLU())
-    model.add(core.Dropout(0.1))
+    model.add(core.Dropout(drop))
     model.add(core.Dense(10))
     model.add(ReLU())
-    model.add(core.Dropout(0.1))
+    model.add(core.Dropout(drop))
     # With CNN (Convolution2D(4,4,3),MaxPooling2D(2,2),dense(50),dropout(0.4),dense(30),dropout(0.4) the RMSE is 0.7
 if (reg_model=='NN')|(reg_model=='lin'): #Flatten from 8D image to array
     x_train = x_train.reshape([x_train.shape[0],x_train.shape[1]*x_train.shape[2]*x_train.shape[3]])
     x_test = x_test.reshape([x_test.shape[0],x_test.shape[1]*x_test.shape[2]*x_test.shape[3]])
 if (reg_model == 'NN'):
+    #drop = 0.15
+    drop = 0.5
     model = models.Sequential()
-    model.add(core.Dense(200, input_shape=x_train.shape))
+    model.add(core.Dense(8000, input_shape=x_train.shape))
     model.add(ReLU())
-    model.add(core.Dropout(0.5))
+    #model.add(core.Dropout(drop))
+    model.add(core.Dense(4000))
+    model.add(ReLU())
+    model.add(core.Dropout(drop))
+    model.add(core.Dense(2000))
+    model.add(ReLU())
+    model.add(core.Dropout(drop))
+    model.add(core.Dense(1000))
+    model.add(ReLU())
+    model.add(core.Dropout(drop))
+    model.add(core.Dense(500))
+    model.add(ReLU())
+    model.add(core.Dropout(drop))
+    model.add(core.Dense(250))
+    model.add(ReLU())
+    model.add(core.Dropout(drop))
+    model.add(core.Dense(125))
+    model.add(ReLU())
+    model.add(core.Dropout(drop))
     model.add(core.Dense(50))
     model.add(ReLU())
-    model.add(core.Dropout(0.5))
-    model.add(core.Dense(10))
-    model.add(ReLU())
-    model.add(core.Dropout(0.5))
+    model.add(core.Dropout(drop))
 if (reg_model == 'CNN')|(reg_model=='NN'):
-    model.add(core.Dense(1,activation='relu'))
+    model.add(core.Dense(1,activation='linear'))
     #model.add(ReLU())
-    model.compile(optimizer=optimizers.SGD(), loss='mean_squared_logarithmic_error')
-    history = model.fit(x_train, y_train,validation_split=0.2, batch_size=30, epochs=100,
+    #model.compile(optimizer=optimizers.SGD(), loss='mean_squared_logarithmic_error')
+    model.compile(optimizer=optimizers.Adam(learning_rate=0.0001), loss='mean_squared_error', metrics=['mse','mae'])
+    history = model.fit(x_train, y_train,validation_split=0.1, batch_size=16, epochs=20,
                         callbacks=[tensorboard_callback],verbose=True)
     #score = model.evaluate(x=x_test, y=y_test, batch_size=30, verbose=1)
     pred = model.predict(x_test)
 if (reg_model == 'lin'):
     ### Testing different regression models from Scikit-Learn
-    # reg = tree.DecisionTreeRegressor() # Fairly good results! RMSE 0.4
+    #reg = tree.DecisionTreeRegressor() # Fairly good results! RMSE 0.4
     #reg = AdaBoostRegressor(tree.DecisionTreeRegressor(max_depth=4), n_estimators=300) # Bad
     #reg = linear_model.LinearRegression() # Useless
     #reg = svm.SVR() # Bad results!
     #reg = SGDRegressor() #Useless!
     #reg = linear_model.Lasso() #Bad results!
-    reg = linear_model.Ridge(alpha=.5) #Good! RMSE: 0.38
     #reg = linear_model.ElasticNet(random_state=0) #Bad!
+    reg = linear_model.Ridge(alpha=.5) #Good! RMSE: 0.38
     reg = reg.fit(x_train, y_train)
     pred = reg.predict(x_test)
 
@@ -202,10 +225,25 @@ if False: #CAREFUL: Very slow plotting time if a large sample size is used.
                       columns=['Truth','Prediction','Pixel values','Sample'])
     sns.pairplot(df.sample(n=100),hue='Sample')
 elif True:
-    ax = sns.regplot(x=y_test, y=pred)
+    if reg_model=='CNN':
+        x_train_temp = x_train.reshape([x_train.shape[0], x_train.shape[1] * x_train.shape[2] * x_train.shape[3]])
+        x_test_temp = x_test.reshape([x_test.shape[0], x_test.shape[1] * x_test.shape[2] * x_test.shape[3]])
+    else:
+        x_train_temp = x_train
+        x_test_temp = x_test
+    if pred.ndim > 1:
+        pred_temp = pred[:,0]
+    else:
+        pred_temp = pred
+    ax = sns.scatterplot(x=y_test, y=pred_temp, size=x_test_temp.mean(axis=1), hue=x_test_temp.std(axis=1))
     ax.set(ylabel="Prediction", xlabel="Truth")
-    ax.set_ylim(-1,1)
-    ax.set_xlim(-1, 1)
+    ax.legend(title='Size=Mean & Hue=Std', loc='center right')
+    if standardize:
+        ax.set_ylim(-1,1)
+        ax.set_xlim(-1, 1)
+    else:
+        ax.set_ylim(0, 1)
+        ax.set_xlim(0, 1)
 else:
     #g = sns.jointplot(hue=x_test[:,:,:,:].flatten(),x=truth,y=prediction)
     g = sns.jointplot(hue=x_test.flatten(), x=truth, y=prediction)
@@ -217,6 +255,11 @@ else:
     offsets = dots.get_offsets()
     jittered_offsets = offsets + np.random.uniform(0, 1, offsets.shape)
     dots.set_offsets(jittered_offsets)
+if False & (reg_model=='CNN'): # Plot an example training image.
+    image_no = 5
+    fig, axes = plt.subplots(2, 4)
+    for i in range(0, 8):
+        sns.heatmap(ax=axes.flat[i], data=x_train[image_no, :, :, i])
 
 plt.tight_layout()
 tracker.stop()
