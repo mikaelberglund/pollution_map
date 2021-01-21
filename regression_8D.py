@@ -17,21 +17,25 @@ from keras.layers import ReLU, ReLU
 from codecarbon import EmissionsTracker
 tracker = EmissionsTracker()
 tracker.start() #Start tracking energy use.
-def flipud_8D(x,y,x_temp,y_temp):
+def flipud_8D(x,y,x_temp,y_temp,f,di):
+    x_temp = x_temp[f].reshape(np.insert(x_temp.shape[1:4], 0, di, axis=0))
     x = np.append(x,x_temp[:, ::-1, :, :],0)
-    y = np.append(y, y_temp, 0)
+    y = np.append(y, y_temp[f[:,0,0,0]], 0)
     return x,y
-def fliplr_8D(x,y,x_temp,y_temp):
+def fliplr_8D(x,y,x_temp,y_temp,f,di):
+    x_temp = x_temp[f].reshape(np.insert(x_temp.shape[1:4], 0, di, axis=0))
     x = np.append(x,x_temp[:, :, ::-1, :],0)
-    y = np.append(y,y_temp,0)
+    y = np.append(y,y_temp[f[:,0,0,0]],0)
     return x,y
-def flipudlr_8D(x,y,x_temp,y_temp):
+def flipudlr_8D(x,y,x_temp,y_temp,f,di):
+    x_temp = x_temp[f].reshape(np.insert(x_temp.shape[1:4], 0, di, axis=0))
     x = np.append(x,x_temp[:, ::-1, ::-1, :],0)
-    y = np.append(y_temp, y, 0)
+    y = np.append(y_temp[f[:,0,0,0]], y, 0)
     return x,y
-def noise_8D(x,y,x_temp,y_temp):
+def noise_8D(x,y,x_temp,y_temp,f,di):
+    x_temp = x_temp[f].reshape(np.insert(x_temp.shape[1:4], 0, di, axis=0))
     x = np.append(x,random_noise(x_temp),0)
-    y = np.append(y_temp, y, 0)
+    y = np.append(y_temp[f[:,0,0,0]], y, 0)
     return x,y
 
 path = 'Pollution_8DXL/*.npy'
@@ -106,23 +110,34 @@ x_train, x_test, y_train, y_test = model_selection.\
 ### AUGMENT DATA
 x_temp = x_train
 y_temp = y_train
-x_train, y_train = flipud_8D(x_train,y_train,x_temp,y_temp)
-x_train, y_train = fliplr_8D(x_train,y_train,x_temp,y_temp)
-x_train, y_train = flipudlr_8D(x_train,y_train,x_temp,y_temp)
-x_train, y_train = noise_8D(x_train,y_train,x_temp,y_temp)
-x_temp1, y_temp1 = flipud_8D(x_train,y_train,x_temp,y_temp)
-x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp)
-x_temp1, y_temp1 = fliplr_8D(x_train,y_train,x_temp,y_temp)
-x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp)
-x_temp1, y_temp1 = flipudlr_8D(x_train,y_train,x_temp,y_temp)
-x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp)
+d = pd.DataFrame(y_train)
+iv = pd.cut(d[0],2).value_counts().sort_index().index[0]
+f = ~(d[0].between(iv.left,iv.right).values)
+#e = 1.5
+#v = d.value_counts().index[0][0]
+#f = ~((d >= v-e)&(d <= v+e)).values
+di = f.sum()
+f = np.reshape(np.broadcast_to(f,np.append(x_train.shape[1:4],x_train.shape[0])),x_train.shape)
+x_train = x_train[f].reshape(np.insert(x_train.shape[1:4], 0, di, axis=0))
+y_train = y_train[f[:,0,0,0]]
+x_train, y_train = flipud_8D(x_train,y_train,x_temp,y_temp,f,di)
+x_train, y_train = fliplr_8D(x_train,y_train,x_temp,y_temp,f,di)
+x_train, y_train = flipudlr_8D(x_train,y_train,x_temp,y_temp,f,di)
+x_train, y_train = noise_8D(x_train,y_train,x_temp,y_temp,f,di)
+x_temp1, y_temp1 = flipud_8D(x_train,y_train,x_temp,y_temp,f,di)
+x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp,f,di)
+x_temp1, y_temp1 = fliplr_8D(x_train,y_train,x_temp,y_temp,f,di)
+x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp,f,di)
+x_temp1, y_temp1 = flipudlr_8D(x_train,y_train,x_temp,y_temp,f,di)
+x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp,f,di)
 print('Number of training images (after augmentation, excl. outliers): '+str(x_train.shape[0]))
 
-description = input('Add description to log name: ')
-logdir = "logs/scalars/" + datetime.now().strftime("%y%m%d-%H%M")+ ' '+ str(description)
-tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir,profile_batch=0)
-
 reg_model = 'NN'
+if (reg_model == 'CNN')|(reg_model=='NN'):
+    description = input('Add description to log name: ')
+    logdir = "logs/scalars/" + datetime.now().strftime("%y%m%d-%H%M")+ ' '+ str(description)
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir,profile_batch=0)
+
 
 if reg_model == 'CNN':
     drop = 0.1
@@ -165,10 +180,10 @@ if (reg_model == 'NN'):
     #drop = 0.15
     drop = 0.5
     model = models.Sequential()
-    model.add(core.Dense(8000, input_shape=x_train.shape))
+    model.add(core.Dense(1000, input_shape=x_train.shape))
     model.add(ReLU())
-    #model.add(core.Dropout(drop))
-    model.add(core.Dense(4000))
+    #model.add(core.Dropout(drop)) #Dropout not recommended for initial layer.
+    model.add(core.Dense(500))
     model.add(ReLU())
     model.add(core.Dropout(drop))
     model.add(core.Dense(2000))
@@ -180,21 +195,21 @@ if (reg_model == 'NN'):
     model.add(core.Dense(500))
     model.add(ReLU())
     model.add(core.Dropout(drop))
-    model.add(core.Dense(250))
-    model.add(ReLU())
-    model.add(core.Dropout(drop))
-    model.add(core.Dense(125))
-    model.add(ReLU())
-    model.add(core.Dropout(drop))
-    model.add(core.Dense(50))
-    model.add(ReLU())
-    model.add(core.Dropout(drop))
+    # model.add(core.Dense(250))
+    # model.add(ReLU())
+    # model.add(core.Dropout(drop))
+    # model.add(core.Dense(125))
+    # model.add(ReLU())
+    # model.add(core.Dropout(drop))
+    # model.add(core.Dense(50))
+    # model.add(ReLU())
+    # model.add(core.Dropout(drop))
 if (reg_model == 'CNN')|(reg_model=='NN'):
     model.add(core.Dense(1,activation='linear'))
     #model.add(ReLU())
     #model.compile(optimizer=optimizers.SGD(), loss='mean_squared_logarithmic_error')
-    model.compile(optimizer=optimizers.Adam(learning_rate=0.0001), loss='mean_squared_error', metrics=['mse','mae'])
-    history = model.fit(x_train, y_train,validation_split=0.1, batch_size=16, epochs=20,
+    model.compile(optimizer=optimizers.Adam(learning_rate=0.001), loss='mean_squared_error', metrics=['mse','mae'])
+    history = model.fit(x_train, y_train,validation_split=0.1, batch_size=8, epochs=20,
                         callbacks=[tensorboard_callback],verbose=True)
     #score = model.evaluate(x=x_test, y=y_test, batch_size=30, verbose=1)
     pred = model.predict(x_test)

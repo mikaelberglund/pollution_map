@@ -91,13 +91,18 @@ def get_last(imagecol,s,e,ar,i,ee_dataset):
                                     dftemp = dftemp.append(dft,ignore_index=True)
                             if verbose:
                                 print(str(datetime.datetime.now().strftime("%H:%M:%S"))+': Found data on date: '+str(d - dt.timedelta(days=day)))
-                                print('For location: ' + str(i) + '. Shape: ' + str(dftemp.shape))
+                                print(str(datetime.datetime.now().strftime("%H:%M:%S"))+': For location: ' + str(i) + '. Shape: ' + str(dftemp.shape))
+                                if i == 'NO-31':
+                                    print('NO-31')
                             return dftemp,date
                         else:
                             day += 1
                     elif (im_test.getInfo() is None) & testds:
                         day += 1
                     elif ~testds:
+                        if verbose:
+                            print(str(datetime.datetime.now().strftime("%H:%M:%S"))+': No data found for location: ' + str(i))
+                            print(str(datetime.datetime.now().strftime("%H:%M:%S"))+': Checked all dates in range.')
                         return pd.DataFrame(columns=['latitude','longitude','date','location']),0
                 # except:
                 #     if verbose:
@@ -105,11 +110,13 @@ def get_last(imagecol,s,e,ar,i,ee_dataset):
                 #     return pd.DataFrame(columns=['latitude', 'longitude', 'date', 'location']), 0
         else:
             if verbose:
-                print('No data found for location: '+ str(i))
+                print(str(datetime.datetime.now().strftime("%H:%M:%S"))+': No data found for location: '+ str(i))
+                print(str(datetime.datetime.now().strftime("%H:%M:%S"))+': Image collection has mean=0.')
             return pd.DataFrame(columns=['latitude', 'longitude', 'date', 'location']), 0
     else:
         if verbose:
-            print('No data found for location: ' + str(i))
+            print(str(datetime.datetime.now().strftime("%H:%M:%S"))+': No data found for location: ' + str(i))
+            print(str(datetime.datetime.now().strftime("%H:%M:%S"))+': Image collection has shape=0')
         return pd.DataFrame(columns=['latitude', 'longitude', 'date', 'location']), 0
 
 
@@ -245,7 +252,7 @@ start_date = '2020-03-21'
 delta = 16
 end_date = '2020-12-21'
 i = 1
-start_country = 11
+start_country = 20
 end_country = 94
 j = start_country
 while dt.datetime.strptime(end_date,'%Y-%m-%d') > dt.datetime.strptime(start_date,'%Y-%m-%d')+dt.timedelta(days=i*delta):
