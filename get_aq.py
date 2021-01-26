@@ -248,11 +248,11 @@ except:
 
 ### Define which date ranges to loop the data fetching through.
 verbose = True
-start_date = '2020-03-21'
+start_date = '2020-04-10'
 delta = 16
 end_date = '2020-12-21'
 i = 1
-start_country = 20
+start_country = 33
 end_country = 94
 j = start_country
 while dt.datetime.strptime(end_date,'%Y-%m-%d') > dt.datetime.strptime(start_date,'%Y-%m-%d')+dt.timedelta(days=i*delta):

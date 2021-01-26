@@ -11,6 +11,7 @@ from skimage.util import random_noise
 import matplotlib.pyplot as plt
 from sklearn import linear_model, tree
 from sklearn.metrics import mean_squared_error
+from sklearn.neural_network import MLPRegressor
 from keras.layers import ReLU, ReLU
 
 
@@ -90,6 +91,21 @@ if True:
     x_train = x_train[f]
     y_train = y_train[f]
 
+### REBALANCE DATA
+if True:
+    for i in range(0,1):
+        d = pd.DataFrame(y_train)
+        iv = pd.cut(d[0],200).value_counts().sort_index().index[0]
+        f = ~(d[0].between(iv.left,iv.right).values)
+        keep = pd.cut(d[0], 200).value_counts()[1]
+        f[0:2 * keep] = True
+        di = f.sum()
+        #f = np.reshape(np.broadcast_to(f,np.append(x_train.shape[1:4],x_train.shape[0])),x_train.shape)
+        f = np.broadcast_to(f,x_train.shape[::-1]).T
+        x_train = x_train[f].reshape(np.insert(x_train.shape[1:4], 0, di, axis=0))
+        y_train = y_train[f[:,0,0,0]]
+    
+
 ### STANDARDIZE DATA
 standardize = True
 if standardize:
@@ -105,21 +121,22 @@ print('Number of training images (excl. outliers): '+str(x_train.shape[0]))
 
 ### SPLIT INTO TRAIN & TEST
 x_train, x_test, y_train, y_test = model_selection.\
-    train_test_split(x_train, y_train, test_size=.1)
+    train_test_split(x_train, y_train, test_size=.2)
 
 ### AUGMENT DATA
 x_temp = x_train
 y_temp = y_train
-d = pd.DataFrame(y_train)
-iv = pd.cut(d[0],2).value_counts().sort_index().index[0]
-f = ~(d[0].between(iv.left,iv.right).values)
-#e = 1.5
-#v = d.value_counts().index[0][0]
-#f = ~((d >= v-e)&(d <= v+e)).values
-di = f.sum()
-f = np.reshape(np.broadcast_to(f,np.append(x_train.shape[1:4],x_train.shape[0])),x_train.shape)
-x_train = x_train[f].reshape(np.insert(x_train.shape[1:4], 0, di, axis=0))
-y_train = y_train[f[:,0,0,0]]
+if False:
+    d = pd.DataFrame(y_train)
+    iv = pd.cut(d[0],2).value_counts().sort_index().index[0]
+    f = ~(d[0].between(iv.left,iv.right).values)
+    di = f.sum()
+    f = np.reshape(np.broadcast_to(f,np.append(x_train.shape[1:4],x_train.shape[0])),x_train.shape)
+    x_train = x_train[f].reshape(np.insert(x_train.shape[1:4], 0, di, axis=0))
+    y_train = y_train[f[:,0,0,0]]
+else:
+    f = np.full(shape=x_train.shape,fill_value=True)
+    di = x_train.shape[0]
 x_train, y_train = flipud_8D(x_train,y_train,x_temp,y_temp,f,di)
 x_train, y_train = fliplr_8D(x_train,y_train,x_temp,y_temp,f,di)
 x_train, y_train = flipudlr_8D(x_train,y_train,x_temp,y_temp,f,di)
@@ -130,9 +147,19 @@ x_temp1, y_temp1 = fliplr_8D(x_train,y_train,x_temp,y_temp,f,di)
 x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp,f,di)
 x_temp1, y_temp1 = flipudlr_8D(x_train,y_train,x_temp,y_temp,f,di)
 x_train, y_train = noise_8D(x_temp1,y_temp1,x_temp,y_temp,f,di)
+if False:
+    d = pd.DataFrame(y_train)
+    iv = pd.cut(d[0],5).value_counts().sort_index().index[0]
+    f = ~(d[0].between(iv.left,iv.right).values)
+    di = f.sum()
+    f = np.reshape(np.broadcast_to(f, np.append(x_train.shape[1:4], x_train.shape[0])), x_train.shape)
+    x_train = x_train[f].reshape(np.insert(x_train.shape[1:4], 0, di, axis=0))
+    y_train = y_train[f[:,0,0,0]]
 print('Number of training images (after augmentation, excl. outliers): '+str(x_train.shape[0]))
 
-reg_model = 'NN'
+### SELECT MODEL TYPE!
+reg_model = 'LIN'
+
 if (reg_model == 'CNN')|(reg_model=='NN'):
     description = input('Add description to log name: ')
     logdir = "logs/scalars/" + datetime.now().strftime("%y%m%d-%H%M")+ ' '+ str(description)
@@ -173,17 +200,17 @@ if reg_model == 'CNN':
     model.add(ReLU())
     model.add(core.Dropout(drop))
     # With CNN (Convolution2D(4,4,3),MaxPooling2D(2,2),dense(50),dropout(0.4),dense(30),dropout(0.4) the RMSE is 0.7
-if (reg_model=='NN')|(reg_model=='lin'): #Flatten from 8D image to array
+if (reg_model=='NN')|(reg_model=='LIN'): #Flatten from 8D image to array
     x_train = x_train.reshape([x_train.shape[0],x_train.shape[1]*x_train.shape[2]*x_train.shape[3]])
     x_test = x_test.reshape([x_test.shape[0],x_test.shape[1]*x_test.shape[2]*x_test.shape[3]])
 if (reg_model == 'NN'):
     #drop = 0.15
     drop = 0.5
     model = models.Sequential()
-    model.add(core.Dense(1000, input_shape=x_train.shape))
+    model.add(core.Dense(8000, input_shape=[x_train.shape[1]]))
     model.add(ReLU())
     #model.add(core.Dropout(drop)) #Dropout not recommended for initial layer.
-    model.add(core.Dense(500))
+    model.add(core.Dense(4000))
     model.add(ReLU())
     model.add(core.Dropout(drop))
     model.add(core.Dense(2000))
@@ -195,34 +222,49 @@ if (reg_model == 'NN'):
     model.add(core.Dense(500))
     model.add(ReLU())
     model.add(core.Dropout(drop))
-    # model.add(core.Dense(250))
-    # model.add(ReLU())
-    # model.add(core.Dropout(drop))
-    # model.add(core.Dense(125))
-    # model.add(ReLU())
-    # model.add(core.Dropout(drop))
-    # model.add(core.Dense(50))
-    # model.add(ReLU())
-    # model.add(core.Dropout(drop))
+    model.add(core.Dense(250))
+    model.add(ReLU())
+    model.add(core.Dropout(drop))
+    model.add(core.Dense(125))
+    model.add(ReLU())
+    model.add(core.Dropout(drop))
+    model.add(core.Dense(50))
+    model.add(ReLU())
+    model.add(core.Dropout(drop))
+    model.add(core.Dense(25))
+    model.add(ReLU())
+    model.add(core.Dropout(drop))
+    model.add(core.Dense(12))
+    model.add(ReLU())
+    model.add(core.Dropout(drop))
+    model.add(core.Dense(6))
+    model.add(ReLU())
+    model.add(core.Dropout(drop))
+    model.add(core.Dense(3))
+    model.add(ReLU())
+    model.add(core.Dropout(drop))
 if (reg_model == 'CNN')|(reg_model=='NN'):
     model.add(core.Dense(1,activation='linear'))
     #model.add(ReLU())
     #model.compile(optimizer=optimizers.SGD(), loss='mean_squared_logarithmic_error')
     model.compile(optimizer=optimizers.Adam(learning_rate=0.001), loss='mean_squared_error', metrics=['mse','mae'])
-    history = model.fit(x_train, y_train,validation_split=0.1, batch_size=8, epochs=20,
+    history = model.fit(x_train, y_train,validation_split=0.1, batch_size=32, epochs=5,
                         callbacks=[tensorboard_callback],verbose=True)
+    model.save('temp_model')
     #score = model.evaluate(x=x_test, y=y_test, batch_size=30, verbose=1)
     pred = model.predict(x_test)
-if (reg_model == 'lin'):
+if (reg_model == 'LIN'):
     ### Testing different regression models from Scikit-Learn
-    #reg = tree.DecisionTreeRegressor() # Fairly good results! RMSE 0.4
+    reg = tree.DecisionTreeRegressor(criterion='friedman_mse', max_features=5) # Fairly good results! RMSE 0.4
+    #reg = MLPRegressor(random_state=1, max_iter=10000) #Bad results!
     #reg = AdaBoostRegressor(tree.DecisionTreeRegressor(max_depth=4), n_estimators=300) # Bad
     #reg = linear_model.LinearRegression() # Useless
     #reg = svm.SVR() # Bad results!
     #reg = SGDRegressor() #Useless!
     #reg = linear_model.Lasso() #Bad results!
     #reg = linear_model.ElasticNet(random_state=0) #Bad!
-    reg = linear_model.Ridge(alpha=.5) #Good! RMSE: 0.38
+    #reg = linear_model.Ridge(alpha=.5) #Good! RMSE: 0.38
+    #reg = linear_model.PoissonRegressor()
     reg = reg.fit(x_train, y_train)
     pred = reg.predict(x_test)
 
